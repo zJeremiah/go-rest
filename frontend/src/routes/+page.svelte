@@ -86,8 +86,8 @@
         if (res.ok) {
           const savedRequest = await res.json();
           savedRequests = [...savedRequests, savedRequest];
-          selectRequest(savedRequest);
-          console.log('✅ New request created:', savedRequest.name);
+          selectRequest(savedRequest); // This will automatically save to localStorage
+          console.log('✅ New request created and selected:', savedRequest.name);
         } else {
           console.error('❌ Failed to create request');
         }
@@ -134,7 +134,20 @@
   }
 
   async function saveRequest(requestData) {
-    if (!selectedRequest) return;
+    console.log('🎯 Parent saveRequest function called');
+    console.log('🔍 Received requestData:', requestData);
+    console.log('🔍 selectedRequest:', selectedRequest);
+    
+    if (!selectedRequest) {
+      console.log('❌ No selected request, aborting save');
+      return;
+    }
+
+    console.log('🔄 Parent received save request for:', selectedRequest.name);
+    console.log('🔍 NEW URL from form:', requestData.url);
+    console.log('🔍 OLD URL in state:', selectedRequest.url);
+    console.log('🔍 URLs are different:', requestData.url !== selectedRequest.url);
+    console.log('🔍 Will update URL:', selectedRequest.url, '→', requestData.url);
 
     try {
       const updateData = {
@@ -147,6 +160,9 @@
         params: requestData.params || []
       };
 
+      console.log('📤 Sending update to backend:', updateData);
+      console.log('🌐 Making API call to /api/requests/update');
+
       const res = await fetch('/api/requests/update', {
         method: 'PUT',
         headers: {
@@ -155,13 +171,36 @@
         body: JSON.stringify(updateData)
       });
 
+      console.log('📨 API response status:', res.status);
+      
       if (res.ok) {
+        console.log('✅ API call successful');
+        
         // Update local state
+        const oldUrl = selectedRequest.url;
         savedRequests = savedRequests.map(r => 
           r.id === selectedRequest.id ? { ...r, ...updateData } : r
         );
         selectedRequest = { ...selectedRequest, ...updateData };
-        console.log('✅ Request saved:', selectedRequest.name);
+        
+        console.log('✅ Request auto-saved:', selectedRequest.name);
+        console.log('🔄 URL updated in local state from:', oldUrl, 'to:', updateData.url);
+        console.log('📊 Updated savedRequests array length:', savedRequests.length);
+        
+        // Force a re-render by triggering reactivity
+        savedRequests = [...savedRequests];
+        
+        // Optional: Could dispatch custom event to notify child component save is complete
+        // This helps with the save status feedback
+      } else {
+        const errorText = await res.text();
+        console.error('❌ Failed to save request:', res.status, errorText);
+        console.error('📄 Error response body:', errorText);
+        
+        // Show user-friendly error message for file locking issues
+        if (errorText.includes('file may be locked') || errorText.includes('Access is denied')) {
+          console.warn('⚠️  File temporarily locked - save will be retried automatically');
+        }
       }
     } catch (error) {
       console.error('❌ Error saving request:', error);
@@ -181,8 +220,8 @@
       if (res.ok) {
         const duplicatedRequest = await res.json();
         savedRequests = [...savedRequests, duplicatedRequest];
-        selectRequest(duplicatedRequest);
-        console.log('✅ Request duplicated:', duplicatedRequest.name);
+        selectRequest(duplicatedRequest); // This will automatically save to localStorage
+        console.log('✅ Request duplicated and selected:', duplicatedRequest.name);
       } else {
         console.error('❌ Failed to duplicate request');
       }
@@ -219,6 +258,15 @@
           
           if (selectedRequest?.id === request.id) {
             selectedRequest = null;
+            // Clear localStorage since the selected request was deleted
+            localStorage.removeItem('lastSelectedRequestId');
+            console.log('🗑️  Cleared last selected request from localStorage');
+            
+            // Auto-select another request if available
+            if (newRequests.length > 0) {
+              console.log('🔄 Auto-selecting another request after deletion');
+              selectRequest(newRequests[0]);
+            }
           }
           console.log('✅ Request deleted from UI:', request.name);
         } else {
@@ -241,6 +289,9 @@
         console.log(`📂 Loaded ${newRequests.length} saved requests from server`);
         console.log('📊 Request IDs:', newRequests.map(r => r.id));
         savedRequests = newRequests;
+        
+        // Auto-select the last selected request after loading
+        autoSelectLastRequest();
       }
     } catch (error) {
       console.error('❌ Error loading saved requests:', error);
@@ -304,6 +355,11 @@
     }
     
     selectedRequest = request;
+    
+    // Store selected request ID in localStorage for persistence
+    localStorage.setItem('lastSelectedRequestId', request.id);
+    console.log('📌 Selected request saved to localStorage:', request.name, request.id);
+    
     // Dispatch custom event to populate the form
     const event = new CustomEvent('loadRequest', {
       detail: {
@@ -315,6 +371,30 @@
       }
     });
     window.dispatchEvent(event);
+  }
+
+  // Auto-select the last selected request
+  function autoSelectLastRequest() {
+    const lastSelectedId = localStorage.getItem('lastSelectedRequestId');
+    if (lastSelectedId && savedRequests.length > 0) {
+      console.log('🔄 Looking for last selected request ID:', lastSelectedId);
+      
+      const lastRequest = savedRequests.find(r => r.id === lastSelectedId);
+      if (lastRequest) {
+        console.log('✅ Auto-selecting last request:', lastRequest.name);
+        selectRequest(lastRequest);
+      } else {
+        console.log('⚠️  Last selected request not found, selecting first available');
+        // If the last selected request doesn't exist anymore, select the first one
+        if (savedRequests.length > 0) {
+          selectRequest(savedRequests[0]);
+        }
+      }
+    } else if (savedRequests.length > 0) {
+      console.log('📝 No previous selection, selecting first request');
+      // If no previous selection, select the first request
+      selectRequest(savedRequests[0]);
+    }
   }
 
   // Reference to RequestForm component

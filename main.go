@@ -422,20 +422,63 @@ func saveSavedRequests(data *SavedRequestsData) error {
 		return fmt.Errorf("failed to marshal requests data: %v", err)
 	}
 
-	// Write to temporary file first, then rename (atomic operation)
+	// On Windows, try direct write first (simpler approach)
+	// If that fails, fall back to atomic write with retries
+	if err := tryDirectWrite(jsonData); err == nil {
+		log.Printf("💾 Saved %d requests to %s", len(data.Requests), requestsFileName)
+		return nil
+	}
+
+	// Fallback: atomic write with retry logic for Windows file locking issues
 	tempFileName := requestsFileName + ".tmp"
 	if err := os.WriteFile(tempFileName, jsonData, 0644); err != nil {
 		return fmt.Errorf("failed to write temporary file: %v", err)
 	}
 
-	// Atomic rename
-	if err := os.Rename(tempFileName, requestsFileName); err != nil {
-		os.Remove(tempFileName) // Clean up temp file on error
-		return fmt.Errorf("failed to rename temporary file: %v", err)
+	// Retry rename operation with backoff for Windows file locking
+	maxRetries := 5
+	baseDelay := 50 * time.Millisecond
+
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		// Try to remove target file first (Windows sometimes requires this)
+		if _, err := os.Stat(requestsFileName); err == nil {
+			os.Remove(requestsFileName)
+			time.Sleep(10 * time.Millisecond) // Small delay after removal
+		}
+
+		// Attempt rename
+		if err := os.Rename(tempFileName, requestsFileName); err == nil {
+			log.Printf("💾 Saved %d requests to %s (attempt %d)", len(data.Requests), requestsFileName, attempt)
+			return nil
+		} else {
+			log.Printf("⚠️  Rename attempt %d failed: %v", attempt, err)
+			if attempt < maxRetries {
+				delay := time.Duration(attempt) * baseDelay
+				time.Sleep(delay)
+			}
+		}
 	}
 
-	log.Printf("💾 Saved %d requests to %s", len(data.Requests), requestsFileName)
-	return nil
+	// If all retries failed, clean up and return error
+	os.Remove(tempFileName)
+	return fmt.Errorf("failed to save after %d attempts - file may be locked by another process", maxRetries)
+}
+
+// tryDirectWrite attempts a direct write to the file (simpler, works most of the time)
+func tryDirectWrite(jsonData []byte) error {
+	// Try to write directly to the file
+	file, err := os.OpenFile(requestsFileName, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	_, err = file.Write(jsonData)
+	if err != nil {
+		return err
+	}
+
+	return file.Sync() // Ensure data is written to disk
 }
 
 // handleRequests handles GET requests to retrieve all saved requests
