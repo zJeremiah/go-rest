@@ -9,6 +9,8 @@
   // Saved requests
   let savedRequests = [];
   let selectedRequest = null;
+  let renamingRequestId = null;
+  let newRequestName = '';
   
   // Variables
   let variables = [];
@@ -175,28 +177,32 @@
       
       if (res.ok) {
         console.log('✅ API call successful');
-        
-        // Update local state
+
+        // Update local state with proper isolation
         const oldUrl = selectedRequest.url;
+
+        // Create a properly isolated updated request object
+        const updatedRequest = { ...selectedRequest, ...updateData };
+
+        // Update savedRequests array with proper isolation
         savedRequests = savedRequests.map(r => 
-          r.id === selectedRequest.id ? { ...r, ...updateData } : r
+          r.id === selectedRequest.id ? updatedRequest : r
         );
-        selectedRequest = { ...selectedRequest, ...updateData };
-        
+
+        // Update selectedRequest reference
+        selectedRequest = updatedRequest;
+
         console.log('✅ Request auto-saved:', selectedRequest.name);
         console.log('🔄 URL updated in local state from:', oldUrl, 'to:', updateData.url);
         console.log('📊 Updated savedRequests array length:', savedRequests.length);
-        
-        // Force a re-render by triggering reactivity
-        savedRequests = [...savedRequests];
-        
+
         // Optional: Could dispatch custom event to notify child component save is complete
         // This helps with the save status feedback
       } else {
         const errorText = await res.text();
         console.error('❌ Failed to save request:', res.status, errorText);
         console.error('📄 Error response body:', errorText);
-        
+
         // Show user-friendly error message for file locking issues
         if (errorText.includes('file may be locked') || errorText.includes('Access is denied')) {
           console.warn('⚠️  File temporarily locked - save will be retried automatically');
@@ -235,7 +241,7 @@
       try {
         console.log('🗑️ Deleting request:', request.id, request.name);
         console.log('📊 Requests before delete:', savedRequests.length);
-        
+
         const res = await fetch('/api/requests/delete', {
           method: 'DELETE',
           headers: {
@@ -249,19 +255,19 @@
         if (res.ok) {
           const responseData = await res.json();
           console.log('✅ Delete response:', responseData);
-          
+  
           // Filter out the deleted request
           const newRequests = savedRequests.filter(r => r.id !== request.id);
           console.log('📊 Requests after filter:', newRequests.length);
-          
+  
           savedRequests = newRequests;
-          
-          if (selectedRequest?.id === request.id) {
+  
+            if (selectedRequest?.id === request.id) {
             selectedRequest = null;
             // Clear localStorage since the selected request was deleted
             localStorage.removeItem('lastSelectedRequestId');
             console.log('🗑️  Cleared last selected request from localStorage');
-            
+    
             // Auto-select another request if available
             if (newRequests.length > 0) {
               console.log('🔄 Auto-selecting another request after deletion');
@@ -279,6 +285,79 @@
     }
   }
 
+  async function startRenameRequest(request) {
+    console.log('🏷️ Starting rename for request:', request.id, request.name);
+    renamingRequestId = request.id;
+    newRequestName = request.name || '';
+    console.log('🏷️ Set renamingRequestId:', renamingRequestId, 'newRequestName:', newRequestName);
+  }
+
+  function cancelRename() {
+    renamingRequestId = null;
+    newRequestName = '';
+  }
+
+  async function saveRename(request) {
+    console.log('💾 Saving rename for request:', request.id, 'new name:', newRequestName);
+    
+    if (!newRequestName || !newRequestName.trim()) {
+      console.log('❌ Empty name detected, canceling rename');
+      cancelRename();
+      return;
+    }
+
+    try {
+      const updateData = {
+        id: request.id,
+        name: newRequestName.trim(),
+        url: request.url,
+        method: request.method,
+        headers: request.headers,
+        body: request.body,
+        params: request.params
+      };
+
+      const res = await fetch('/api/requests/update', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updateData)
+      });
+
+      if (res.ok) {
+        // Update local state
+        const updatedRequest = { ...request, name: newRequestName.trim() };
+
+        savedRequests = savedRequests.map(r => 
+          r.id === request.id ? updatedRequest : r
+        );
+
+        // Update selectedRequest if it's the one being renamed
+        if (selectedRequest?.id === request.id) {
+          selectedRequest = updatedRequest;
+        }
+
+        console.log('✅ Request renamed:', newRequestName.trim());
+        cancelRename();
+      } else {
+        console.error('❌ Failed to rename request');
+        alert('Failed to rename request. Please try again.');
+      }
+    } catch (error) {
+      console.error('❌ Error renaming request:', error);
+      alert('Failed to rename request. Please try again.');
+    }
+  }
+
+  function handleRenameKeydown(event, request) {
+    if (event.key === 'Enter') {
+      saveRename(request);
+    } else if (event.key === 'Escape') {
+      cancelRename();
+    }
+  }
+
   async function loadSavedRequests() {
     try {
       console.log('📂 Loading saved requests from server...');
@@ -287,9 +366,23 @@
         const data = await res.json();
         const newRequests = data.requests || [];
         console.log(`📂 Loaded ${newRequests.length} saved requests from server`);
-        console.log('📊 Request IDs:', newRequests.map(r => r.id));
-        savedRequests = newRequests;
-        
+        console.log('📊 Request details:', newRequests.map(r => ({ id: r.id, name: r.name, url: r.url })));
+
+        // Ensure proper isolation by creating new objects
+        savedRequests = newRequests.map(req => ({
+          ...req,
+          id: req.id,
+          name: req.name,
+          url: req.url,
+          method: req.method,
+          headers: req.headers ? { ...req.headers } : {},
+          body: req.body || '',
+          params: req.params ? [...req.params] : [],
+          lastResponse: req.lastResponse ? { ...req.lastResponse } : null,
+          createdAt: req.createdAt,
+          updatedAt: req.updatedAt
+        }));
+
         // Auto-select the last selected request after loading
         autoSelectLastRequest();
       }
@@ -499,7 +592,7 @@
             ➕ Add Request
           </button>
         </div>
-        
+
         {#if savedRequests.length === 0}
           <div class="empty-state">
             <div class="empty-icon">📝</div>
@@ -523,7 +616,19 @@
                 >
                   <div class="request-header">
                     <span class="method-badge method-{request.method.toLowerCase()}">{request.method}</span>
-                    <span class="request-name">{request.name}</span>
+                    {#if renamingRequestId === request.id}
+                      <input 
+                        type="text" 
+                        bind:value={newRequestName}
+                        on:keydown={(e) => handleRenameKeydown(e, request)}
+                        on:blur={() => saveRename(request)}
+                        on:click={(e) => e.stopPropagation()}
+                        class="rename-input"
+                        autofocus
+                      />
+                    {:else}
+                      <span class="request-name">{request.name}</span>
+                    {/if}
                   </div>
                   <div class="request-url">{request.url}</div>
                   {#if request.lastResponse}
@@ -535,8 +640,15 @@
                     </div>
                   {/if}
                 </div>
-                
+        
                 <div class="request-actions">
+                  <button 
+                    class="action-btn rename-btn" 
+                    on:click={(e) => { e.stopPropagation(); startRenameRequest(request); }}
+                    title="Rename request"
+                  >
+                    ✏️
+                  </button>
                   <button 
                     class="action-btn duplicate-btn" 
                     on:click={(e) => { e.stopPropagation(); duplicateRequest(request); }}
@@ -565,7 +677,7 @@
             ➕ Add Variable
           </button>
         </div>
-        
+
         {#if variables.length === 0}
           <div class="empty-state">
             <div class="empty-icon">🔧</div>
@@ -677,7 +789,8 @@
   @media (min-width: 1024px) {
     .container {
       flex-direction: row;
-      height: calc(100vh - 200px); /* Account for header */
+      min-height: calc(100vh - 200px); /* Account for header, but allow expansion */
+      max-height: calc(100vh - 140px); /* More flexible max height */
     }
   }
 
@@ -685,7 +798,7 @@
   .request-section,
   .response-section {
     min-height: 400px;
-    overflow: hidden;
+    overflow-y: auto;
     box-sizing: border-box;
     flex-shrink: 0;
   }
@@ -920,6 +1033,11 @@
     border-top: 1px solid #e5e7eb;
   }
 
+  .rename-btn:hover {
+    background: #fef3c7;
+    color: #d97706;
+  }
+
   .delete-btn:hover {
     background: #fee2e2;
     color: #dc2626;
@@ -956,6 +1074,24 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .rename-input {
+    flex: 1;
+    font-weight: 500;
+    color: #374151;
+    font-size: 0.875rem;
+    border: 1px solid #3b82f6;
+    border-radius: 4px;
+    padding: 0.25rem 0.5rem;
+    background: white;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+  }
+
+  .rename-input:focus {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
   }
 
   .request-url {

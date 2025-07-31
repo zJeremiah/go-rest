@@ -747,6 +747,8 @@
 
   .tab-content {
     background: white;
+    max-height: 400px;
+    overflow-y: auto;
   }
 
   .tab-panel {
@@ -771,6 +773,8 @@
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
+    max-height: 300px;
+    overflow-y: auto;
   }
 
   .param-row {
@@ -919,5 +923,28 @@
   @keyframes pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.6; }
+  }
+
+  /* Custom scrollbar styling */
+  .tab-content::-webkit-scrollbar,
+  .params-list::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .tab-content::-webkit-scrollbar-track,
+  .params-list::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 4px;
+  }
+
+  .tab-content::-webkit-scrollbar-thumb,
+  .params-list::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+  }
+
+  .tab-content::-webkit-scrollbar-thumb:hover,
+  .params-list::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
   }
 </style>
