@@ -1,0 +1,114 @@
+{
+  "requests": [
+    {
+      "id": "8a453f264c8c44a0",
+      "name": "test 1",
+      "url": "https://jsonplaceholder.typicode.com/posts/1",
+      "method": "GET",
+      "headers": {
+        "Authorization": "Bearer YOUR_TOKEN_HERE",
+        "Content-Type": "application/json"
+      },
+      "body": "",
+      "params": [],
+      "lastResponse": {
+        "status": "200 OK",
+        "statusCode": 200,
+        "headers": {
+          "Access-Control-Allow-Credentials": "true",
+          "Age": "26760",
+          "Alt-Svc": "h3=\":443\"; ma=86400",
+          "Cache-Control": "max-age=43200",
+          "Cf-Cache-Status": "HIT",
+          "Cf-Ray": "96796dc46e19da91-PDX",
+          "Content-Type": "application/json; charset=utf-8",
+          "Date": "Thu, 31 Jul 2025 01:47:37 GMT",
+          "Etag": "W/\"124-yiKdLzqO5gfBrJFrcdJ8Yq0LGnU\"",
+          "Expires": "-1",
+          "Nel": "{\"report_to\":\"heroku-nel\",\"response_headers\":[\"Via\"],\"max_age\":3600,\"success_fraction\":0.01,\"failure_fraction\":0.1}",
+          "Pragma": "no-cache",
+          "Report-To": "{\"group\":\"heroku-nel\",\"endpoints\":[{\"url\":\"https://nel.heroku.com/reports?s=khnjNSpuCbFoIAUhqXUvvUCsotaohULz9bRBGonKlZc%3D\\u0026sid=e11707d5-02a7-43ef-b45e-2cf4d2036f7d\\u0026ts=1753899696\"}],\"max_age\":3600}",
+          "Reporting-Endpoints": "heroku-nel=\"https://nel.heroku.com/reports?s=khnjNSpuCbFoIAUhqXUvvUCsotaohULz9bRBGonKlZc%3D\u0026sid=e11707d5-02a7-43ef-b45e-2cf4d2036f7d\u0026ts=1753899696\"",
+          "Server": "cloudflare",
+          "Server-Timing": "cfCacheStatus;desc=\"HIT\"",
+          "Vary": "Origin, Accept-Encoding",
+          "Via": "2.0 heroku-router",
+          "X-Content-Type-Options": "nosniff",
+          "X-Powered-By": "Express",
+          "X-Ratelimit-Limit": "1000",
+          "X-Ratelimit-Remaining": "999",
+          "X-Ratelimit-Reset": "1753899726"
+        },
+        "body": "{\n  \"userId\": 1,\n  \"id\": 1,\n  \"title\": \"sunt aut facere repellat provident occaecati excepturi optio reprehenderit\",\n  \"body\": \"quia et suscipit\\nsuscipit recusandae consequuntur expedita et cum\\nreprehenderit molestiae ut ut quas totam\\nnostrum rerum est autem sunt rem eveniet architecto\"\n}"
+      },
+      "createdAt": "2025-07-30T19:37:40-06:00",
+      "updatedAt": "2025-07-30T20:06:41-06:00"
+    },
+    {
+      "id": "39a929bc977b9050",
+      "name": "test 2",
+      "url": "https://jsonplaceholder.typicode.com/posts/1",
+      "method": "GET",
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "body": "",
+      "params": [],
+      "lastResponse": {
+        "status": "200 OK",
+        "statusCode": 200,
+        "headers": {
+          "Access-Control-Allow-Credentials": "true",
+          "Age": "24859",
+          "Alt-Svc": "h3=\":443\"; ma=86400",
+          "Cache-Control": "max-age=43200",
+          "Cf-Cache-Status": "HIT",
+          "Cf-Ray": "9679659a0db2c523-LAX",
+          "Content-Type": "application/json; charset=utf-8",
+          "Date": "Thu, 31 Jul 2025 01:42:02 GMT",
+          "Etag": "W/\"124-yiKdLzqO5gfBrJFrcdJ8Yq0LGnU\"",
+          "Expires": "-1",
+          "Nel": "{\"report_to\":\"heroku-nel\",\"response_headers\":[\"Via\"],\"max_age\":3600,\"success_fraction\":0.01,\"failure_fraction\":0.1}",
+          "Pragma": "no-cache",
+          "Report-To": "{\"group\":\"heroku-nel\",\"endpoints\":[{\"url\":\"https://nel.heroku.com/reports?s=3c3Fp5msIfO9YJmGKLLH37NbdHbsGO3riI7%2FPUQNKsU%3D\\u0026sid=e11707d5-02a7-43ef-b45e-2cf4d2036f7d\\u0026ts=1752776521\"}],\"max_age\":3600}",
+          "Reporting-Endpoints": "heroku-nel=\"https://nel.heroku.com/reports?s=3c3Fp5msIfO9YJmGKLLH37NbdHbsGO3riI7%2FPUQNKsU%3D\u0026sid=e11707d5-02a7-43ef-b45e-2cf4d2036f7d\u0026ts=1752776521\"",
+          "Server": "cloudflare",
+          "Server-Timing": "cfCacheStatus;desc=\"HIT\"",
+          "Vary": "Origin, Accept-Encoding",
+          "Via": "2.0 heroku-router",
+          "X-Content-Type-Options": "nosniff",
+          "X-Powered-By": "Express",
+          "X-Ratelimit-Limit": "1000",
+          "X-Ratelimit-Remaining": "999",
+          "X-Ratelimit-Reset": "1752776526"
+        },
+        "body": "{\n  \"userId\": 1,\n  \"id\": 1,\n  \"title\": \"sunt aut facere repellat provident occaecati excepturi optio reprehenderit\",\n  \"body\": \"quia et suscipit\\nsuscipit recusandae consequuntur expedita et cum\\nreprehenderit molestiae ut ut quas totam\\nnostrum rerum est autem sunt rem eveniet architecto\"\n}"
+      },
+      "createdAt": "2025-07-30T19:37:47-06:00",
+      "updatedAt": "2025-07-30T20:08:02-06:00"
+    },
+    {
+      "id": "86f262ef4bcb6496",
+      "name": "test 2",
+      "url": "https://api.example.com/endpoint",
+      "method": "GET",
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "body": "",
+      "params": [],
+      "createdAt": "2025-07-30T20:17:29-06:00",
+      "updatedAt": "2025-07-30T20:17:29-06:00"
+    }
+  ],
+  "variables": [
+    {
+      "key": "h1",
+      "value": "https://jsonplaceholder.typicode.com"
+    },
+    {
+      "key": "jsontype",
+      "value": ""
+    }
+  ]
+}

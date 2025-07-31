@@ -1,0 +1,496 @@
+<script>
+  
+  export let response = null;
+  export let loading = false;
+
+  let hljs;
+  let responseBodyElement;
+  let highlightLoaded = false;
+  let activeTab = 'body';
+  let wordWrap = false;
+
+  const tabs = [
+    { id: 'body', label: 'Response Body', icon: '📄' },
+    { id: 'headers', label: 'Headers', icon: '📋' }
+  ];
+
+  async function loadHighlight() {
+    if (!highlightLoaded && typeof window !== 'undefined') {
+      try {
+        hljs = await import('highlight.js');
+        await import('highlight.js/styles/github.css');
+        highlightLoaded = true;
+      } catch (error) {
+        console.warn('Failed to load syntax highlighting:', error);
+      }
+    }
+  }
+
+  function formatJSON(str) {
+    try {
+      return JSON.stringify(JSON.parse(str), null, 2);
+    } catch {
+      return str;
+    }
+  }
+
+  function getStatusClass(statusCode) {
+    if (!statusCode) return 'status-error';
+    if (statusCode >= 200 && statusCode < 300) return 'status-success';
+    if (statusCode >= 400) return 'status-error';
+    return 'status-warning';
+  }
+
+  function isJSON(str) {
+    try {
+      JSON.parse(str);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async function highlightCode(code, language = 'json') {
+    if (!code) return code;
+    
+    await loadHighlight();
+    
+    if (!hljs) return code;
+    
+    try {
+      if (language === 'json' && isJSON(code)) {
+        code = formatJSON(code);
+      }
+      return hljs.default.highlight(code, { language }).value;
+    } catch {
+      return code;
+    }
+  }
+
+  function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(() => {
+      alert('Copied to clipboard!');
+    }).catch(() => {
+      alert('Failed to copy to clipboard');
+    });
+  }
+
+  let lastResponseBody = '';
+
+  // Update highlighting when response changes
+  $: if (responseBodyElement && response && response.body !== lastResponseBody) {
+    lastResponseBody = response.body || '';
+    updateHighlighting();
+  }
+
+  async function updateHighlighting() {
+    if (!responseBodyElement || !response?.body) return;
+    
+    try {
+      const highlighted = await highlightCode(response.body);
+      if (responseBodyElement && highlighted) {
+        responseBodyElement.innerHTML = highlighted;
+      }
+    } catch (error) {
+      console.warn('Syntax highlighting failed:', error);
+      // Fallback to plain text
+      if (responseBodyElement) {
+        responseBodyElement.textContent = response.body;
+      }
+    }
+  }
+</script>
+
+<div class="card">
+  <h2>📨 Response</h2>
+  
+  {#if loading}
+    <div class="loading">
+      <div class="spinner"></div>
+      <p>Sending request...</p>
+    </div>
+  {:else if response}
+    <div class="response-content">
+      <!-- Status -->
+      <div class="response-status">
+        <div class="status-info">
+          <span class={`status-badge ${getStatusClass(response.statusCode)}`}>
+            {response.status}
+          </span>
+          {#if response.error}
+            <div class="error-message">
+              ❌ {response.error}
+            </div>
+          {/if}
+        </div>
+      </div>
+
+      {#if !response.error}
+        <!-- Tabs Interface -->
+        <div class="tabs-container">
+          <div class="tabs-header">
+            {#each tabs as tab}
+              <button 
+                type="button"
+                class="tab-button"
+                class:active={activeTab === tab.id}
+                on:click={() => activeTab = tab.id}
+              >
+                {tab.icon} {tab.label}
+                {#if tab.id === 'headers' && response.headers}
+                  <span class="tab-count">({Object.keys(response.headers).length})</span>
+                {/if}
+              </button>
+            {/each}
+          </div>
+
+          <div class="tab-content">
+            {#if activeTab === 'body' && response.body}
+              <div class="tab-panel">
+                <div class="body-header">
+                  <div class="body-info">
+                    <span class="body-size">{new Blob([response.body]).size} bytes</span>
+                    {#if isJSON(response.body)}
+                      <span class="format-indicator">JSON</span>
+                    {/if}
+                  </div>
+                  <div class="body-actions">
+                    <label class="wrap-toggle">
+                      <input 
+                        type="checkbox" 
+                        bind:checked={wordWrap}
+                      />
+                      Word Wrap
+                    </label>
+                    <button 
+                      class="btn-small" 
+                      on:click={() => copyToClipboard(response.body)}
+                    >
+                      📋 Copy
+                    </button>
+                  </div>
+                </div>
+                <div class="response-body" class:word-wrap={wordWrap}>
+                  <pre bind:this={responseBodyElement}><code>{response.body}</code></pre>
+                </div>
+              </div>
+            {:else if activeTab === 'body'}
+              <div class="tab-panel">
+                <div class="empty-state">
+                  <div class="empty-icon">📄</div>
+                  <p>No response body</p>
+                </div>
+              </div>
+            {/if}
+
+            {#if activeTab === 'headers'}
+              <div class="tab-panel">
+                {#if response.headers && Object.keys(response.headers).length > 0}
+                  <div class="headers-grid">
+                    {#each Object.entries(response.headers) as [key, value]}
+                      <div class="header-item">
+                        <strong>{key}:</strong> <span>{value}</span>
+                      </div>
+                    {/each}
+                  </div>
+                {:else}
+                  <div class="empty-state">
+                    <div class="empty-icon">📋</div>
+                    <p>No response headers</p>
+                  </div>
+                {/if}
+              </div>
+            {/if}
+          </div>
+        </div>
+      {/if}
+    </div>
+  {:else}
+    <div class="empty-state">
+      <div class="empty-icon">🚀</div>
+      <p>Send a request to see the response here</p>
+    </div>
+  {/if}
+</div>
+
+<style>
+  h2 {
+    margin: 0 0 1.5rem 0;
+    color: #374151;
+    font-size: 1.5rem;
+  }
+
+
+
+  .loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 3rem;
+    color: #6b7280;
+  }
+
+  .spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid #f3f4f6;
+    border-top: 3px solid #667eea;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 1rem;
+  }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  .response-content {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .response-status {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+
+  .status-badge {
+    display: inline-block;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 1rem;
+  }
+
+  .error-message {
+    margin-top: 0.5rem;
+    padding: 0.75rem;
+    background: #fef2f2;
+    color: #dc2626;
+    border-radius: 6px;
+    border: 1px solid #fecaca;
+  }
+
+  .headers-grid {
+    display: grid;
+    gap: 0.5rem;
+    background: #f9fafb;
+    padding: 1rem;
+    border-radius: 6px;
+    max-height: 400px;
+    overflow-y: auto;
+  }
+
+  .header-item {
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.875rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #e5e7eb;
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+    gap: 1rem;
+  }
+
+  .header-item:last-child {
+    border-bottom: none;
+  }
+
+  .header-item strong {
+    color: #374151;
+    min-width: 120px;
+    flex-shrink: 0;
+  }
+
+  .header-item span {
+    color: #6b7280;
+    word-break: break-all;
+  }
+
+  .btn-small {
+    background: #f3f4f6;
+    color: #374151;
+    border: 1px solid #d1d5db;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.875rem;
+    transition: all 0.2s ease;
+  }
+
+  .btn-small:hover {
+    background: #e5e7eb;
+  }
+
+  .format-indicator {
+    background: #e0e7ff;
+    color: #3730a3;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 500;
+  }
+
+  /* Tabs Styles */
+  .tabs-container {
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .tabs-header {
+    display: flex;
+    background: #f9fafb;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  .tab-button {
+    flex: 1;
+    padding: 1rem;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: #6b7280;
+    transition: all 0.2s ease;
+    border-bottom: 3px solid transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+  }
+
+  .tab-button:hover {
+    background: #f3f4f6;
+    color: #374151;
+  }
+
+  .tab-button.active {
+    background: white;
+    color: #667eea;
+    border-bottom-color: #667eea;
+  }
+
+  .tab-count {
+    background: #e5e7eb;
+    color: #6b7280;
+    padding: 0.125rem 0.375rem;
+    border-radius: 10px;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  .tab-button.active .tab-count {
+    background: #e0e7ff;
+    color: #667eea;
+  }
+
+  .tab-content {
+    background: white;
+  }
+
+  .tab-panel {
+    padding: 1.5rem;
+  }
+
+  .body-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .body-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .body-size {
+    background: #f3f4f6;
+    color: #374151;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 500;
+  }
+
+  .body-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .wrap-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    color: #374151;
+    cursor: pointer;
+  }
+
+  .wrap-toggle input[type="checkbox"] {
+    accent-color: #667eea;
+  }
+
+  .response-body {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    overflow: auto;
+    max-height: 500px;
+    max-width: 100%;
+  }
+
+  .response-body pre {
+    margin: 0;
+    padding: 1rem;
+    overflow: auto;
+    white-space: pre;
+    max-width: 100%;
+  }
+
+  .response-body.word-wrap pre {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+  }
+
+  .response-body code {
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.875rem;
+    line-height: 1.5;
+  }
+
+  .response-body.word-wrap code {
+    word-break: break-all;
+  }
+
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 4rem 2rem;
+    color: #6b7280;
+    text-align: center;
+  }
+
+  .empty-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+  }
+
+  /* Syntax highlighting adjustments */
+  :global(.hljs) {
+    background: transparent !important;
+    padding: 0 !important;
+  }
+</style>
