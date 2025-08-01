@@ -215,7 +215,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request) {
 	// Make the HTTP request
 	response := makeHTTPRequest(processedReq)
 
-	// Return the response
+	// Return the response to the UI (frontend)
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		log.Printf("❌ Failed to encode response: %v", err)
@@ -267,9 +267,7 @@ func makeHTTPRequest(req ProxyRequest) ProxyResponse {
 	}
 	defer resp.Body.Close()
 
-	// Read response body with size limit
-	const maxBodySize = 10 * 1024 * 1024 // 10MB limit
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBodySize))
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		log.Printf("❌ Failed to read response body: %v", err)
 		return ProxyResponse{

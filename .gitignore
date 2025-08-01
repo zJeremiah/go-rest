@@ -6,6 +6,7 @@
 *.dylib
 gorest
 gorest.exe
+api-tester
 
 # Go test files
 *.test

@@ -15,6 +15,30 @@ body {
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
+/* Explicit light theme */
+html[data-theme="light"],
+body[data-theme="light"],
+html[data-theme="light"] body {
+  background: #f9fafb !important;
+  color: #374151 !important;
+}
+
+/* Explicit blue theme */
+html[data-theme="blue"],
+body[data-theme="blue"],
+html[data-theme="blue"] body {
+  background: #e0f2fe !important;
+  color: #0c4a6e !important;
+}
+
+/* Explicit green theme */
+html[data-theme="green"],
+body[data-theme="green"],
+html[data-theme="green"] body {
+  background: #dcfce7 !important;
+  color: #14532d !important;
+}
+
 /* Respect system dark mode preference if no theme is set */
 @media (prefers-color-scheme: dark) {
   html:not([data-theme]),

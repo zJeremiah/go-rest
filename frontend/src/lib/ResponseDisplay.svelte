@@ -109,29 +109,46 @@
 
     
     try {
-      const highlighted = await highlightCode(response.body);
-      
       if (responseBodyElement) {
         // Get the code element inside the pre element
         const codeElement = responseBodyElement.querySelector('code');
         
-        if (highlighted && highlighted !== response.body && highlighted.trim()) {
-          // Highlighting worked, use it
-          if (codeElement) {
-            codeElement.innerHTML = highlighted;
+        // Check if content is JSON - only highlight JSON content
+        if (isJSON(response.body)) {
+          // Content is JSON, apply syntax highlighting
+          const highlighted = await highlightCode(response.body);
+          
+          if (highlighted && highlighted !== response.body && highlighted.trim()) {
+            // Highlighting worked, use it
+            if (codeElement) {
+              codeElement.innerHTML = highlighted;
+            } else {
+              responseBodyElement.innerHTML = highlighted;
+            }
           } else {
-            responseBodyElement.innerHTML = highlighted;
+            // Highlighting failed, use formatted JSON
+            const formattedText = formatJSON(response.body);
+            if (codeElement) {
+              codeElement.textContent = formattedText;
+            } else {
+              responseBodyElement.textContent = formattedText;
+            }
           }
-
         } else {
-          // Highlighting failed, use formatted plain text
-          const formattedText = isJSON(response.body) ? formatJSON(response.body) : response.body;
+          // Content is NOT JSON (error messages, plain text, etc.)
+          // Display as plain dark text without any highlighting
           if (codeElement) {
-            codeElement.textContent = formattedText;
+            codeElement.textContent = response.body;
+            // Remove any highlight.js classes and add plain text class
+            codeElement.className = 'plain-text';
+            codeElement.style.color = '#212529';
+            codeElement.style.backgroundColor = 'transparent';
           } else {
-            responseBodyElement.textContent = formattedText;
+            responseBodyElement.textContent = response.body;
+            responseBodyElement.className = 'plain-text';
+            responseBodyElement.style.color = '#212529';
+            responseBodyElement.style.backgroundColor = 'transparent';
           }
-
         }
       }
     } catch (error) {
@@ -139,14 +156,18 @@
       // Fallback to plain text formatting
       if (responseBodyElement) {
         const codeElement = responseBodyElement.querySelector('code');
-        const formattedText = isJSON(response.body) ? formatJSON(response.body) : response.body;
         
         if (codeElement) {
-          codeElement.textContent = formattedText;
+          codeElement.textContent = response.body;
+          codeElement.className = 'plain-text';
+          codeElement.style.color = '#212529';
+          codeElement.style.backgroundColor = 'transparent';
         } else {
-          responseBodyElement.textContent = formattedText;
+          responseBodyElement.textContent = response.body;
+          responseBodyElement.className = 'plain-text';
+          responseBodyElement.style.color = '#212529';
+          responseBodyElement.style.backgroundColor = 'transparent';
         }
-
       }
     }
   }
@@ -640,5 +661,33 @@
     color: #212529 !important;
     word-break: break-all;
     flex: 1;
+  }
+
+  /* Ensure plain text responses are always readable */
+  .response-body pre,
+  .response-body code {
+    color: #212529;
+    background: #f8f9fa;
+  }
+
+  /* Override any highlight.js styles for plain text */
+  .response-body code:not(.hljs) {
+    color: #212529 !important;
+    background: transparent !important;
+  }
+
+  /* Specific styling for plain text content (error messages, etc.) */
+  .plain-text {
+    color: #212529 !important;
+    background: transparent !important;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace !important;
+    white-space: pre-wrap !important;
+    word-wrap: break-word !important;
+  }
+
+  /* Ensure plain text is not affected by any highlight.js styling */
+  :global(.plain-text *) {
+    color: inherit !important;
+    background: transparent !important;
   }
 </style>

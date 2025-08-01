@@ -839,7 +839,7 @@
     --bg-primary: #ffffff;
     --bg-secondary: #f9fafb;
     --bg-tertiary: #f3f4f6;
-    --bg-accent: #eff6ff;
+    --bg-accent: #ffecd0;
     --tabs-container-bg: #f9fafb;
     --request-item-bg: #f9fafb;
     --text-primary: #374151;
@@ -863,10 +863,10 @@
   :global([data-theme="dark"]) {
     --bg-primary: #1f2937;
     --bg-secondary: #454545;
-    --bg-tertiary: #393939;
-    --bg-accent: #1e3a8a;
+    --bg-tertiary: #585858;
+    --bg-accent: #5c6c99;
     --tabs-container-bg: #374151;
-    --request-item-bg: #2d3748;
+    --request-item-bg: #5c5c5c;
     --text-primary: #f9fafb;
     --text-secondary: #d1d5db;
     --text-accent: #60a5fa;
@@ -1286,7 +1286,7 @@
 
   .request-name {
     font-weight: 500;
-    color: #374151;
+    color: var(--text-primary);
     font-size: 0.875rem;
     flex: 1;
     overflow: hidden;
@@ -1297,12 +1297,12 @@
   .rename-input {
     flex: 1;
     font-weight: 500;
-    color: #374151;
+    color: var(--text-primary);
     font-size: 0.875rem;
     border: 1px solid #3b82f6;
     border-radius: 4px;
     padding: 0.25rem 0.5rem;
-    background: white;
+    background: var(--bg-primary);
     outline: none;
     box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
   }
@@ -1315,7 +1315,7 @@
   .request-url {
     font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
     font-size: 0.75rem;
-    color: #6b7280;
+    color: var(--text-secondary);
     margin-bottom: 0.5rem;
     overflow: hidden;
     text-overflow: ellipsis;
