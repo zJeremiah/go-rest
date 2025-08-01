@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -12,7 +11,6 @@ import (
 	"os"
 	"strings"
 	"sync"
-	"text/template"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -311,32 +309,22 @@ func generateID() string {
 	return hex.EncodeToString(bytes)
 }
 
-// processTemplate applies variable substitution to a string using Go templates
+// processTemplate applies variable substitution to a string using simple find/replace
 func processTemplate(input string, variables []Variable) (string, error) {
 	if input == "" {
 		return input, nil
 	}
 
-	// Create template data map
-	data := make(map[string]string)
+	result := input
 	for _, variable := range variables {
 		if variable.Key != "" {
-			data[variable.Key] = variable.Value
+			// Replace {{variableName}} with the variable value
+			placeholder := fmt.Sprintf("{{%s}}", variable.Key)
+			result = strings.ReplaceAll(result, placeholder, variable.Value)
 		}
 	}
 
-	// Parse and execute template
-	tmpl, err := template.New("template").Parse(input)
-	if err != nil {
-		return input, fmt.Errorf("template parse error: %v", err)
-	}
-
-	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, data); err != nil {
-		return input, fmt.Errorf("template execute error: %v", err)
-	}
-
-	return buf.String(), nil
+	return result, nil
 }
 
 // processRequestTemplates applies variable substitution to all templated fields in a request

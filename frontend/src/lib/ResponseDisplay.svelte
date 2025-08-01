@@ -79,23 +79,74 @@
 
   // Update highlighting when response changes
   $: if (responseBodyElement && response && response.body !== lastResponseBody) {
+    console.log('🔄 Response body changed, triggering highlighting:', { 
+      hasElement: !!responseBodyElement, 
+      hasResponse: !!response, 
+      bodyLength: response.body?.length || 0,
+      lastBodyLength: lastResponseBody?.length || 0
+    });
     lastResponseBody = response.body || '';
     updateHighlighting();
   }
 
+  // Handle tab switching to body tab
+  $: if (activeTab === 'body' && response?.body && responseBodyElement) {
+    console.log('🔄 Switched to body tab, refreshing content');
+    // Use setTimeout to avoid conflicts with other reactive statements
+    setTimeout(() => updateHighlighting(), 0);
+  }
+
   async function updateHighlighting() {
-    if (!responseBodyElement || !response?.body) return;
+    if (!responseBodyElement || !response?.body) {
+      console.log('🎨 Highlighting skipped:', { element: !!responseBodyElement, hasBody: !!response?.body });
+      // Clear content if no response
+      if (responseBodyElement) {
+        responseBodyElement.textContent = '';
+      }
+      return;
+    }
+    
+
     
     try {
       const highlighted = await highlightCode(response.body);
-      if (responseBodyElement && highlighted) {
-        responseBodyElement.innerHTML = highlighted;
+      
+      if (responseBodyElement) {
+        // Get the code element inside the pre element
+        const codeElement = responseBodyElement.querySelector('code');
+        
+        if (highlighted && highlighted !== response.body && highlighted.trim()) {
+          // Highlighting worked, use it
+          if (codeElement) {
+            codeElement.innerHTML = highlighted;
+          } else {
+            responseBodyElement.innerHTML = highlighted;
+          }
+
+        } else {
+          // Highlighting failed, use formatted plain text
+          const formattedText = isJSON(response.body) ? formatJSON(response.body) : response.body;
+          if (codeElement) {
+            codeElement.textContent = formattedText;
+          } else {
+            responseBodyElement.textContent = formattedText;
+          }
+
+        }
       }
     } catch (error) {
       console.warn('Syntax highlighting failed:', error);
-      // Fallback to plain text
+      // Fallback to plain text formatting
       if (responseBodyElement) {
-        responseBodyElement.textContent = response.body;
+        const codeElement = responseBodyElement.querySelector('code');
+        const formattedText = isJSON(response.body) ? formatJSON(response.body) : response.body;
+        
+        if (codeElement) {
+          codeElement.textContent = formattedText;
+        } else {
+          responseBodyElement.textContent = formattedText;
+        }
+
       }
     }
   }
@@ -171,7 +222,7 @@
                   </div>
                 </div>
                 <div class="response-body" class:word-wrap={wordWrap}>
-                  <pre bind:this={responseBodyElement}><code>{response.body}</code></pre>
+                  <pre bind:this={responseBodyElement}><code></code></pre>
                 </div>
               </div>
             {:else if activeTab === 'body'}
@@ -492,5 +543,102 @@
   :global(.hljs) {
     background: transparent !important;
     padding: 0 !important;
+  }
+
+  /* Highlight.js token styles - ensuring visibility */
+  :global(.hljs-punctuation) {
+    color: #24292e !important;
+    opacity: 1 !important;
+  }
+  
+  :global(.hljs-attr) {
+    color: #6f42c1 !important;
+    opacity: 1 !important;
+  }
+  
+  :global(.hljs-string) {
+    color: #032f62 !important;
+    opacity: 1 !important;
+  }
+  
+  :global(.hljs-number) {
+    color: #005cc5 !important;
+    opacity: 1 !important;
+  }
+  
+  :global(.hljs-literal) {
+    color: #005cc5 !important;
+    opacity: 1 !important;
+  }
+  
+  :global(.hljs-keyword) {
+    color: #d73a49 !important;
+    opacity: 1 !important;
+  }
+
+  /* Enable text selection for response content */
+  .response-body, 
+  .response-body pre, 
+  .response-body code,
+  .response-body *,
+  .tab-content,
+  .tab-panel,
+  .headers-grid,
+  .headers-grid *,
+  .header-item,
+  .header-item *,
+  .header-item strong,
+  .header-item span {
+    user-select: text !important;
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+    cursor: text !important;
+  }
+
+  /* Specifically enable selection for highlighted code */
+  :global(.hljs),
+  :global(.hljs *),
+  :global(.hljs-punctuation),
+  :global(.hljs-attr),
+  :global(.hljs-string),
+  :global(.hljs-number),
+  :global(.hljs-literal),
+  :global(.hljs-keyword) {
+    user-select: text !important;
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+  }
+
+  /* Response Headers styling */
+  .headers-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 0.9rem;
+  }
+
+  .header-item {
+    display: flex;
+    align-items: flex-start;
+    padding: 0.5rem;
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 4px;
+    line-height: 1.4;
+  }
+
+  .header-item strong {
+    color: #495057 !important;
+    font-weight: 600;
+    margin-right: 0.5rem;
+    min-width: fit-content;
+    flex-shrink: 0;
+  }
+
+  .header-item span {
+    color: #212529 !important;
+    word-break: break-all;
+    flex: 1;
   }
 </style>

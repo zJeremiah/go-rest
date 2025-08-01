@@ -196,8 +196,11 @@
     );
   }
 
-  $: {
-    if (selectedRequest && url && url.trim() && hasFormChanged() && !isLoadingRequest) {
+  // Auto-save when any form field changes (explicitly depend on all form fields)
+  $: if (selectedRequest && url && url.trim() && !isLoadingRequest && (url || method || headers || body || params)) {
+    // Check for changes in url, method, headers, body, params
+    const formChanged = hasFormChanged();
+    if (formChanged) {
       clearTimeout(urlSaveTimeout);
       saveStatus = 'pending';
       
@@ -209,6 +212,14 @@
 
   // Save immediately when URL field loses focus
   function handleUrlBlur() {
+    if (selectedRequest && url && url.trim() && hasFormChanged()) {
+      clearTimeout(urlSaveTimeout);
+      saveCurrentRequest();
+    }
+  }
+
+  // Save immediately when header/param fields lose focus
+  function handleFieldBlur() {
     if (selectedRequest && url && url.trim() && hasFormChanged()) {
       clearTimeout(urlSaveTimeout);
       saveCurrentRequest();
@@ -450,12 +461,51 @@
 
     <div class="form-group">
       <label for="method">Method</label>
-      <select id="method" bind:value={method} class="select">
+      <select id="method" bind:value={method} on:blur={handleFieldBlur} class="select">
         {#each methods as methodOption}
           <option value={methodOption}>{methodOption}</option>
         {/each}
       </select>
     </div>
+
+    <!-- Send Request Buttons - Moved to top for better UX -->
+    <div class="button-row">
+      <button 
+        type="button" 
+        class="btn btn-secondary" 
+        disabled={!canSend || !hasFormChanged()}
+        on:click={handleManualSave}
+        title="Save changes to this request"
+      >
+        {#if saveStatus === 'saving'}
+          💾 Saving...
+        {:else if saveStatus === 'saved'}
+          ✅ Saved
+        {:else if hasFormChanged()}
+          💾 Save Changes
+        {:else}
+          ✅ No Changes
+        {/if}
+      </button>
+
+      <button type="submit" class="btn btn-primary" disabled={loading || !canSend}>
+        {#if loading}
+          🔄 Sending...
+        {:else if !canSend}
+          📤 Select a Request First
+        {:else}
+          📤 Send Request
+        {/if}
+      </button>
+    </div>
+    
+    {#if !canSend && !loading}
+      <p class="send-hint">Select a request from the collection to enable sending</p>
+    {/if}
+    
+    {#if hasFormChanged() && canSend}
+      <p class="changes-hint">💡 You have unsaved changes. Click "Save Changes" or they will auto-save in 2 seconds.</p>
+    {/if}
 
     <!-- Preview URL -->
     <div class="form-group">
@@ -510,12 +560,14 @@
                     <input 
                       type="text" 
                       bind:value={header.key}
+                      on:blur={handleFieldBlur}
                       placeholder="Header Name"
                       class="input header-input"
                     />
                     <input 
                       type="text" 
                       bind:value={header.value}
+                      on:blur={handleFieldBlur}
                       placeholder="Header Value"
                       class="input header-input"
                     />
@@ -574,6 +626,7 @@
                     <input 
                       type="text" 
                       bind:value={param.key}
+                      on:blur={handleFieldBlur}
                       placeholder="Key"
                       class="input param-input"
                       on:input={updatePreview}
@@ -581,6 +634,7 @@
                     <input 
                       type="text" 
                       bind:value={param.value}
+                      on:blur={handleFieldBlur}
                       placeholder="Value"
                       class="input param-input"
                       on:input={updatePreview}
@@ -610,6 +664,7 @@
         <textarea 
           id="body"
           bind:value={body} 
+          on:blur={handleFieldBlur}
           placeholder={method === 'POST' ? '{"key": "value"}' : ''}
           class="textarea"
           rows="6"
@@ -617,43 +672,6 @@
       </div>
     {/if}
 
-    <div class="button-row">
-      <button 
-        type="button" 
-        class="btn btn-secondary" 
-        disabled={!canSend || !hasFormChanged()}
-        on:click={handleManualSave}
-        title="Save changes to this request"
-      >
-        {#if saveStatus === 'saving'}
-          💾 Saving...
-        {:else if saveStatus === 'saved'}
-          ✅ Saved
-        {:else if hasFormChanged()}
-          💾 Save Changes
-        {:else}
-          ✅ No Changes
-        {/if}
-      </button>
-
-      <button type="submit" class="btn btn-primary" disabled={loading || !canSend}>
-        {#if loading}
-          🔄 Sending...
-        {:else if !canSend}
-          📤 Select a Request First
-        {:else}
-          📤 Send Request
-        {/if}
-      </button>
-    </div>
-    
-    {#if !canSend && !loading}
-      <p class="send-hint">Select a request from the collection to enable sending</p>
-    {/if}
-    
-    {#if hasFormChanged() && canSend}
-      <p class="changes-hint">💡 You have unsaved changes. Click "Save Changes" or they will auto-save in 2 seconds.</p>
-    {/if}
   </form>
 </div>
 
@@ -691,12 +709,36 @@
     display: flex;
     gap: 1rem;
     align-items: stretch;
+    margin-bottom: 1.5rem;
   }
 
   .btn-primary {
     flex: 2;
-    font-size: 1.1rem;
-    padding: 1rem;
+    font-size: 1rem;
+    padding: 0.75rem 1rem;
+    border: none;
+    background: var(--button-primary, #3b82f6);
+    color: white;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 500;
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background: var(--button-primary-hover, #2563eb);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
+  }
+
+  .btn-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
   }
 
   .btn-secondary {
@@ -705,7 +747,7 @@
     color: #374151;
     border: 1px solid #d1d5db;
     border-radius: 6px;
-    padding: 1rem;
+    padding: 0.75rem 1rem;
     font-size: 0.9rem;
     font-weight: 500;
     cursor: pointer;
@@ -713,7 +755,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    min-height: 48px;
+    min-height: auto;
   }
 
   .btn-secondary:hover:not(:disabled) {
@@ -1087,5 +1129,21 @@
   .headers-list::-webkit-scrollbar-thumb:hover,
   .preview-content::-webkit-scrollbar-thumb:hover {
     background: #94a3b8;
+  }
+
+  /* Enable text selection for URL preview and preview headers */
+  .preview-text-top,
+  .url-preview-top,
+  .url-preview-top *,
+  .preview-text-top *,
+  .preview-content,
+  .preview-header-row,
+  .preview-header-row *,
+  .preview-key,
+  .preview-value {
+    user-select: text !important;
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+    cursor: text !important;
   }
 </style>

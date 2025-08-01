@@ -474,6 +474,15 @@
     // Store selected request ID in localStorage for persistence
     localStorage.setItem('lastSelectedRequestId', request.id);
     
+    // Load the last response if it exists
+    if (request.lastResponse) {
+      response = request.lastResponse;
+      console.log('✅ Loaded last response for request:', request.name);
+    } else {
+      response = null;
+      console.log('ℹ️  No last response found for request:', request.name);
+    }
+    
     // Dispatch custom event to populate the form
     const event = new CustomEvent('loadRequest', {
       detail: {
