@@ -18,6 +18,7 @@ api-tester
 frontend/dist/
 frontend/.svelte-kit/
 frontend/build/
+frontend/vite.config.js.timestamp-*
 
 # Node.js dependencies
 frontend/node_modules/
