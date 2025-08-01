@@ -3,10 +3,9 @@
     {
       "id": "39a929bc977b9050",
       "name": "test 2",
-      "url": "{{h1}}/posts/4",
+      "url": "{{h1}}/photos/2",
       "method": "GET",
       "headers": {
-        "Authorization": "Bearer YOUR_TOKEN_HERE",
         "Content-Type": "application/json"
       },
       "body": "",
@@ -16,19 +15,62 @@
         "statusCode": 200,
         "headers": {
           "Access-Control-Allow-Credentials": "true",
-          "Age": "10726",
+          "Age": "6883",
           "Alt-Svc": "h3=\":443\"; ma=86400",
           "Cache-Control": "max-age=43200",
           "Cf-Cache-Status": "HIT",
-          "Cf-Ray": "967d93448dc181bd-IAD",
+          "Cf-Ray": "9686a6526b768242-IAD",
           "Content-Type": "application/json; charset=utf-8",
-          "Date": "Thu, 31 Jul 2025 13:52:16 GMT",
-          "Etag": "W/\"10e-HqG77o1RAmatkSwR36f4+Io6g1E\"",
+          "Date": "Fri, 01 Aug 2025 16:18:08 GMT",
+          "Etag": "W/\"c1-v6cRIUfE0R9pjdLmlsuXIyU2Kzg\"",
           "Expires": "-1",
           "Nel": "{\"report_to\":\"heroku-nel\",\"response_headers\":[\"Via\"],\"max_age\":3600,\"success_fraction\":0.01,\"failure_fraction\":0.1}",
           "Pragma": "no-cache",
-          "Report-To": "{\"group\":\"heroku-nel\",\"endpoints\":[{\"url\":\"https://nel.heroku.com/reports?s=ZvE400cyKqnPiuw1NXB9QPtVQdytMESz2Inp858Pxto%3D\\u0026sid=e11707d5-02a7-43ef-b45e-2cf4d2036f7d\\u0026ts=1753544590\"}],\"max_age\":3600}",
-          "Reporting-Endpoints": "heroku-nel=\"https://nel.heroku.com/reports?s=ZvE400cyKqnPiuw1NXB9QPtVQdytMESz2Inp858Pxto%3D\u0026sid=e11707d5-02a7-43ef-b45e-2cf4d2036f7d\u0026ts=1753544590\"",
+          "Report-To": "{\"group\":\"heroku-nel\",\"endpoints\":[{\"url\":\"https://nel.heroku.com/reports?s=EOOqYT7pNMcxMiNDOgJ6NOpGXUjLx5S03%2FzVCLYTnuY%3D\\u0026sid=e11707d5-02a7-43ef-b45e-2cf4d2036f7d\\u0026ts=1753812998\"}],\"max_age\":3600}",
+          "Reporting-Endpoints": "heroku-nel=\"https://nel.heroku.com/reports?s=EOOqYT7pNMcxMiNDOgJ6NOpGXUjLx5S03%2FzVCLYTnuY%3D\u0026sid=e11707d5-02a7-43ef-b45e-2cf4d2036f7d\u0026ts=1753812998\"",
+          "Server": "cloudflare",
+          "Server-Timing": "cfCacheStatus;desc=\"HIT\"",
+          "Vary": "Origin, Accept-Encoding",
+          "Via": "2.0 heroku-router",
+          "X-Content-Type-Options": "nosniff",
+          "X-Powered-By": "Express",
+          "X-Ratelimit-Limit": "1000",
+          "X-Ratelimit-Remaining": "998",
+          "X-Ratelimit-Reset": "1753813012"
+        },
+        "body": "{\n  \"albumId\": 1,\n  \"id\": 2,\n  \"title\": \"reprehenderit est deserunt velit ipsam\",\n  \"url\": \"https://via.placeholder.com/600/771796\",\n  \"thumbnailUrl\": \"https://via.placeholder.com/150/771796\"\n}"
+      },
+      "createdAt": "2025-07-30T19:37:47-06:00",
+      "updatedAt": "2025-08-01T10:18:08-06:00"
+    },
+    {
+      "id": "bbefcdceaf51d2e5",
+      "name": "mine",
+      "url": "{{h1}}/todos/1",
+      "method": "GET",
+      "headers": {
+        "Content-Type": "{{content-type}}"
+      },
+      "body": "",
+      "params": [],
+      "lastResponse": {
+        "status": "200 OK",
+        "statusCode": 200,
+        "headers": {
+          "Access-Control-Allow-Credentials": "true",
+          "Age": "22018",
+          "Alt-Svc": "h3=\":443\"; ma=86400",
+          "Cache-Control": "max-age=43200",
+          "Cf-Cache-Status": "HIT",
+          "Cf-Ray": "9686a666bcfc8242-IAD",
+          "Content-Type": "application/json; charset=utf-8",
+          "Date": "Fri, 01 Aug 2025 16:18:11 GMT",
+          "Etag": "W/\"53-hfEnumeNh6YirfjyjaujcOPPT+s\"",
+          "Expires": "-1",
+          "Nel": "{\"report_to\":\"heroku-nel\",\"response_headers\":[\"Via\"],\"max_age\":3600,\"success_fraction\":0.01,\"failure_fraction\":0.1}",
+          "Pragma": "no-cache",
+          "Report-To": "{\"group\":\"heroku-nel\",\"endpoints\":[{\"url\":\"https://nel.heroku.com/reports?s=68sV66pxUgRhNjw%2BwDMWi4mo6l2sAhTV4kVDW3MBRXM%3D\\u0026sid=e11707d5-02a7-43ef-b45e-2cf4d2036f7d\\u0026ts=1753006264\"}],\"max_age\":3600}",
+          "Reporting-Endpoints": "heroku-nel=\"https://nel.heroku.com/reports?s=68sV66pxUgRhNjw%2BwDMWi4mo6l2sAhTV4kVDW3MBRXM%3D\u0026sid=e11707d5-02a7-43ef-b45e-2cf4d2036f7d\u0026ts=1753006264\"",
           "Server": "cloudflare",
           "Server-Timing": "cfCacheStatus;desc=\"HIT\"",
           "Vary": "Origin, Accept-Encoding",
@@ -37,25 +79,12 @@
           "X-Powered-By": "Express",
           "X-Ratelimit-Limit": "1000",
           "X-Ratelimit-Remaining": "999",
-          "X-Ratelimit-Reset": "1753544645"
+          "X-Ratelimit-Reset": "1753006293"
         },
-        "body": "{\n  \"userId\": 1,\n  \"id\": 4,\n  \"title\": \"eum et est occaecati\",\n  \"body\": \"ullam et saepe reiciendis voluptatem adipisci\\nsit amet autem assumenda provident rerum culpa\\nquis hic commodi nesciunt rem tenetur doloremque ipsam iure\\nquis sunt voluptatem rerum illo velit\"\n}"
+        "body": "{\n  \"userId\": 1,\n  \"id\": 1,\n  \"title\": \"delectus aut autem\",\n  \"completed\": false\n}"
       },
-      "createdAt": "2025-07-30T19:37:47-06:00",
-      "updatedAt": "2025-07-31T07:52:16-06:00"
-    },
-    {
-      "id": "bbefcdceaf51d2e5",
-      "name": "mine",
-      "url": "https://api.example.com/endpoint",
-      "method": "GET",
-      "headers": {
-        "Content-Type": "application/json"
-      },
-      "body": "",
-      "params": [],
       "createdAt": "2025-07-31T07:07:34-06:00",
-      "updatedAt": "2025-07-31T07:07:34-06:00"
+      "updatedAt": "2025-08-01T10:18:11-06:00"
     }
   ],
   "variables": [
@@ -64,8 +93,8 @@
       "value": "https://jsonplaceholder.typicode.com"
     },
     {
-      "key": "jsontype",
-      "value": ""
+      "key": "content-type",
+      "value": "application/json"
     }
   ]
 }

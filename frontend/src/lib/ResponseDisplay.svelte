@@ -216,7 +216,7 @@
 <style>
   h2 {
     margin: 0 0 1.5rem 0;
-    color: #374151;
+    color: var(--text-primary, #374151);
     font-size: 1.5rem;
   }
 
@@ -227,7 +227,7 @@
     flex-direction: column;
     align-items: center;
     padding: 3rem;
-    color: #6b7280;
+    color: var(--text-secondary, #6b7280);
   }
 
   .spinner {
@@ -300,20 +300,20 @@
   }
 
   .header-item strong {
-    color: #374151;
+    color: var(--text-primary, #374151);
     min-width: 120px;
     flex-shrink: 0;
   }
 
   .header-item span {
-    color: #6b7280;
+    color: var(--text-secondary, #6b7280);
     word-break: break-all;
   }
 
   .btn-small {
-    background: #f3f4f6;
-    color: #374151;
-    border: 1px solid #d1d5db;
+    background: var(--button-secondary, #f3f4f6);
+    color: var(--text-primary, #374151);
+    border: 1px solid var(--border-primary, #d1d5db);
     padding: 0.25rem 0.5rem;
     border-radius: 4px;
     cursor: pointer;
@@ -365,19 +365,19 @@
   }
 
   .tab-button:hover {
-    background: #f3f4f6;
-    color: #374151;
+    background: var(--bg-tertiary, #f3f4f6);
+    color: var(--text-primary, #374151);
   }
 
   .tab-button.active {
-    background: white;
-    color: #667eea;
-    border-bottom-color: #667eea;
+    background: var(--bg-primary, white);
+    color: var(--text-accent, #667eea);
+    border-bottom-color: var(--border-accent, #667eea);
   }
 
   .tab-count {
-    background: #e5e7eb;
-    color: #6b7280;
+    background: var(--bg-tertiary, #e5e7eb);
+    color: var(--text-secondary, #6b7280);
     padding: 0.125rem 0.375rem;
     border-radius: 10px;
     font-size: 0.75rem;
@@ -478,7 +478,7 @@
     flex-direction: column;
     align-items: center;
     padding: 4rem 2rem;
-    color: #6b7280;
+    color: var(--text-secondary, #6b7280);
     text-align: center;
   }
 

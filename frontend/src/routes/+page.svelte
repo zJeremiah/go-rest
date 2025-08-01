@@ -1,3 +1,17 @@
+<svelte:head>
+  <script>
+    // Prevent FOUC by loading theme immediately
+    (function() {
+      if (typeof localStorage !== 'undefined') {
+        const savedTheme = localStorage.getItem('selectedTheme');
+        if (savedTheme) {
+          document.documentElement.setAttribute('data-theme', savedTheme);
+        }
+      }
+    })();
+  </script>
+</svelte:head>
+
 <script>
   import { onMount } from 'svelte';
   import RequestForm from '../lib/RequestForm.svelte';
@@ -15,6 +29,15 @@
   // Variables
   let variables = [];
   let activeCollectionTab = 'requests';
+  
+  // Theme system
+  let currentTheme = 'light';
+  const themes = [
+    { id: 'light', name: '☀️ Light', label: 'Light Theme' },
+    { id: 'dark', name: '🌙 Dark', label: 'Dark Theme' },
+    { id: 'blue', name: '💙 Blue', label: 'Blue Theme' },
+    { id: 'green', name: '💚 Green', label: 'Green Theme' }
+  ];
   
   // Resizable sections
   let collectionWidth = 300;
@@ -194,7 +217,7 @@
 
         console.log('✅ Request auto-saved:', selectedRequest.name);
         console.log('🔄 URL updated in local state from:', oldUrl, 'to:', updateData.url);
-        console.log('📊 Updated savedRequests array length:', savedRequests.length);
+        console.log('📊 Updated  savedRequests array length:', savedRequests.length);
 
         // Optional: Could dispatch custom event to notify child component save is complete
         // This helps with the save status feedback
@@ -366,7 +389,6 @@
         const data = await res.json();
         const newRequests = data.requests || [];
         console.log(`📂 Loaded ${newRequests.length} saved requests from server`);
-        console.log('📊 Request details:', newRequests.map(r => ({ id: r.id, name: r.name, url: r.url })));
 
         // Ensure proper isolation by creating new objects
         savedRequests = newRequests.map(req => ({
@@ -442,16 +464,15 @@
   }
 
   async function selectRequest(request) {
-    // Save current request before switching (if there is one)
-    if (selectedRequest && requestFormRef?.saveCurrentRequest) {
-      requestFormRef.saveCurrentRequest();
-    }
+    console.log('🎯 SELECTING:', request.name, 'URL:', request.url);
+    
+    // Don't auto-save when switching requests - this causes data corruption
+    // Users should manually save changes if needed
     
     selectedRequest = request;
     
     // Store selected request ID in localStorage for persistence
     localStorage.setItem('lastSelectedRequestId', request.id);
-    console.log('📌 Selected request saved to localStorage:', request.name, request.id);
     
     // Dispatch custom event to populate the form
     const event = new CustomEvent('loadRequest', {
@@ -492,6 +513,12 @@
 
   // Reference to RequestForm component
   let requestFormRef;
+
+  // Accessible focus action for rename input
+  function focusOnMount(element) {
+    element.focus();
+    element.select();
+  }
 
   function startResize(event, type) {
     isResizing = true;
@@ -534,7 +561,31 @@
     }));
   }
 
+  // Theme functions
+  function applyTheme(theme) {
+    if (typeof document !== 'undefined') {
+      document.documentElement.setAttribute('data-theme', theme);
+    }
+    currentTheme = theme;
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('selectedTheme', theme);
+    }
+  }
+
+  function loadSavedTheme() {
+    if (typeof localStorage !== 'undefined') {
+      const savedTheme = localStorage.getItem('selectedTheme');
+      if (savedTheme && themes.find(t => t.id === savedTheme)) {
+        applyTheme(savedTheme);
+      }
+    }
+  }
+
+  // Load theme immediately to prevent FOUC
+  loadSavedTheme();
+
   onMount(() => {
+    
     // Load saved widths from localStorage
     const saved = localStorage.getItem('layoutWidths');
     if (saved) {
@@ -559,6 +610,19 @@
     <div class="card">
       <div class="collection-header">
         <h2>📂 Collection</h2>
+        <div class="theme-selector">
+          <label for="theme-select">Theme:</label>
+          <select 
+            id="theme-select" 
+            bind:value={currentTheme} 
+            on:change={(e) => applyTheme(e.target.value)}
+            class="theme-select"
+          >
+            {#each themes as theme}
+              <option value={theme.id}>{theme.name}</option>
+            {/each}
+          </select>
+        </div>
       </div>
       
       <!-- Collection Tabs -->
@@ -624,7 +688,7 @@
                         on:blur={() => saveRename(request)}
                         on:click={(e) => e.stopPropagation()}
                         class="rename-input"
-                        autofocus
+                        use:focusOnMount
                       />
                     {:else}
                       <span class="request-name">{request.name}</span>
@@ -704,16 +768,18 @@
                     class="variable-value"
                   />
                 </div>
-                <button 
-                  class="action-btn delete-btn" 
-                  on:click={() => removeVariable(index)}
-                  title="Delete variable"
-                >
-                  🗑️
-                </button>
-                {#if variable.key}
-                  <div class="variable-usage">Use: <code>{'{'+'{'}{variable.key}{'}'+'}'}</code></div>
-                {/if}
+                <div class="variable-footer">
+                  {#if variable.key}
+                    <div class="variable-usage">Use: <code>{'{'+'{'}{variable.key}{'}'+'}'}</code></div>
+                  {/if}
+                  <button 
+                    class="variable-delete-btn" 
+                    on:click={() => removeVariable(index)}
+                    title="Delete variable"
+                  >
+                    🗑️ Delete
+                  </button>
+                </div>
               </div>
             {/each}
           </div>
@@ -758,6 +824,108 @@
 </div>
 
 <style>
+  /* Theme System - CSS Custom Properties */
+  :global(:root) {
+    /* Light Theme (Default) */
+    --bg-primary: #ffffff;
+    --bg-secondary: #f9fafb;
+    --bg-tertiary: #f3f4f6;
+    --bg-accent: #eff6ff;
+    --tabs-container-bg: #f9fafb;
+    --request-item-bg: #f9fafb;
+    --text-primary: #374151;
+    --text-secondary: #6b7280;
+    --text-accent: #3b82f6;
+    --border-primary: #e5e7eb;
+    --border-secondary: #d1d5db;
+    --border-accent: #3b82f6;
+    --button-primary: #3b82f6;
+    --button-primary-hover: #2563eb;
+    --button-secondary: #f3f4f6;
+    --button-secondary-hover: #e5e7eb;
+    --success: #16a34a;
+    --warning: #d97706;
+    --error: #dc2626;
+    --preview-bg: #f0f9ff;
+    --preview-border: #bae6fd;
+    --preview-text: #0369a1;
+  }
+
+  :global([data-theme="dark"]) {
+    --bg-primary: #1f2937;
+    --bg-secondary: #454545;
+    --bg-tertiary: #393939;
+    --bg-accent: #1e3a8a;
+    --tabs-container-bg: #374151;
+    --request-item-bg: #2d3748;
+    --text-primary: #f9fafb;
+    --text-secondary: #d1d5db;
+    --text-accent: #60a5fa;
+    --border-primary: #374151;
+    --border-secondary: #4b5563;
+    --border-accent: #60a5fa;
+    --button-primary: #3b82f6;
+    --button-primary-hover: #2563eb;
+    --button-secondary: #374151;
+    --button-secondary-hover: #4b5563;
+    --success: #22c55e;
+    --warning: #f59e0b;
+    --error: #ef4444;
+    --preview-bg: #344a86;
+    --preview-border: #3b82f6;
+    --preview-text: #93c5fd;
+  }
+
+  :global([data-theme="blue"]) {
+    --bg-primary: #f0f9ff;
+    --bg-secondary: #e0f2fe;
+    --bg-tertiary: #bae6fd;
+    --bg-accent: #dbeafe;
+    --tabs-container-bg: #e0f2fe;
+    --request-item-bg: #f0f9ff;
+    --text-primary: #0c4a6e;
+    --text-secondary: #0369a1;
+    --text-accent: #2563eb;
+    --border-primary: #7dd3fc;
+    --border-secondary: #38bdf8;
+    --border-accent: #2563eb;
+    --button-primary: #0ea5e9;
+    --button-primary-hover: #0284c7;
+    --button-secondary: #e0f2fe;
+    --button-secondary-hover: #bae6fd;
+    --success: #059669;
+    --warning: #d97706;
+    --error: #dc2626;
+    --preview-bg: #dbeafe;
+    --preview-border: #93c5fd;
+    --preview-text: #1e40af;
+  }
+
+  :global([data-theme="green"]) {
+    --bg-primary: #f0fdf4;
+    --bg-secondary: #dcfce7;
+    --bg-tertiary: #bbf7d0;
+    --bg-accent: #d1fae5;
+    --tabs-container-bg: #dcfce7;
+    --request-item-bg: #f0fdf4;
+    --text-primary: #14532d;
+    --text-secondary: #166534;
+    --text-accent: #059669;
+    --border-primary: #86efac;
+    --border-secondary: #4ade80;
+    --border-accent: #059669;
+    --button-primary: #10b981;
+    --button-primary-hover: #059669;
+    --button-secondary: #dcfce7;
+    --button-secondary-hover: #bbf7d0;
+    --success: #16a34a;
+    --warning: #d97706;
+    --error: #dc2626;
+    --preview-bg: #d1fae5;
+    --preview-border: #86efac;
+    --preview-text: #047857;
+  }
+
   .container {
     display: flex;
     width: calc(100vw - 2rem);
@@ -855,16 +1023,57 @@
 
   /* Collection Section Styling */
   .collection-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     margin-bottom: 1rem;
+    gap: 1rem;
   }
 
   .collection-header h2 {
     margin: 0;
+    color: var(--text-primary);
+  }
+
+  /* Theme Selector */
+  .theme-selector {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .theme-selector label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    white-space: nowrap;
+  }
+
+  .theme-select {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-primary);
+    border-radius: 4px;
+    padding: 0.375rem 0.75rem;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-width: 120px;
+  }
+
+  .theme-select:hover {
+    border-color: var(--border-accent);
+  }
+
+  .theme-select:focus {
+    outline: none;
+    border-color: var(--border-accent);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
   }
 
   .collection-tabs {
     display: flex;
-    background: #f9fafb;
+    background: var(--tabs-container-bg);
     border-radius: 6px;
     padding: 4px;
     margin-bottom: 1rem;
@@ -879,7 +1088,7 @@
     border-radius: 4px;
     font-size: 0.875rem;
     font-weight: 500;
-    color: #6b7280;
+    color: var(--text-secondary);
     cursor: pointer;
     transition: all 0.2s ease;
     display: flex;
@@ -889,13 +1098,13 @@
   }
 
   .collection-tab:hover {
-    background: rgba(255, 255, 255, 0.5);
-    color: #374151;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
   }
 
   .collection-tab.active {
-    background: white;
-    color: #3b82f6;
+    background: var(--bg-primary);
+    color: var(--text-accent);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   }
 
@@ -920,7 +1129,7 @@
   }
 
   .btn-add {
-    background: #3b82f6;
+    background: var(--button-primary);
     color: white;
     border: none;
     padding: 0.5rem 1rem;
@@ -936,7 +1145,7 @@
   }
 
   .btn-add:hover {
-    background: #2563eb;
+    background: var(--button-primary-hover);
     transform: translateY(-1px);
     box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
   }
@@ -971,8 +1180,8 @@
   }
 
   .request-item {
-    background: #f9fafb;
-    border: 1px solid #e5e7eb;
+    background: var(--request-item-bg);
+    border: 1px solid var(--border-primary);
     border-radius: 6px;
     transition: all 0.2s ease;
     display: flex;
@@ -981,15 +1190,15 @@
   }
 
   .request-item:hover {
-    background: #f3f4f6;
-    border-color: #d1d5db;
+    background: var(--bg-tertiary);
+    border-color: var(--border-secondary);
     transform: translateY(-1px);
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
   }
 
   .request-item.selected {
-    background: #eff6ff;
-    border-color: #3b82f6;
+    background: var(--bg-accent);
+    border-color: var(--border-accent);
     box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
   }
 
@@ -1177,10 +1386,10 @@
   .variable-usage {
     font-size: 0.75rem;
     color: #6b7280;
-    margin-top: 0.5rem;
     display: flex;
     align-items: center;
     gap: 0.25rem;
+    flex: 1;
   }
 
   .variable-usage code {
@@ -1193,15 +1402,39 @@
     font-weight: 600;
   }
 
-  .variable-item {
-    position: relative;
+  .variable-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 0.75rem;
+    gap: 1rem;
   }
 
-  .variable-item .action-btn {
-    position: absolute;
-    top: 0.75rem;
-    right: 0.75rem;
-    margin: 0;
+  .variable-delete-btn {
+    background: #fef2f2;
+    color: #dc2626;
+    border: 1px solid #fecaca;
+    padding: 0.375rem 0.75rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    white-space: nowrap;
+  }
+
+  .variable-delete-btn:hover {
+    background: #fee2e2;
+    border-color: #f87171;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(220, 38, 38, 0.15);
+  }
+
+  .variable-delete-btn:active {
+    transform: translateY(0);
   }
 
   /* Smooth transitions for resize */

@@ -9,9 +9,8 @@
 
   let url = '';
   let method = 'GET';
-  let headers = '{\n  "Content-Type": "application/json"\n}';
+  let headers = [{ key: 'Content-Type', value: 'application/json', enabled: true }];
   let body = '';
-  let headersValid = true;
   let activeTab = 'headers';
   let params = [{ key: '', value: '', enabled: true }];
   let saveStatus = ''; // Track save status for user feedback
@@ -23,14 +22,42 @@
     { id: 'params', label: 'Params', icon: '🔍' }
   ];
 
-  function validateHeaders() {
-    try {
-      JSON.parse(headers);
-      headersValid = true;
-    } catch {
-      headersValid = false;
-    }
+  function addHeader() {
+    headers = [...headers, { key: '', value: '', enabled: true }];
   }
+
+  function removeHeader(index) {
+    headers = headers.filter((_, i) => i !== index);
+  }
+
+  // Build headers with variable substitution for preview
+  function buildHeadersPreview() {
+    const processedHeaders = {};
+    headers.filter(h => h.enabled && h.key && h.key.trim()).forEach(header => {
+      const processedKey = processTemplate(header.key.trim(), variables);
+      const processedValue = processTemplate(header.value || '', variables);
+      processedHeaders[processedKey] = processedValue;
+    });
+    return processedHeaders;
+  }
+
+  // Check if any headers contain variables
+  function hasHeaderVariables() {
+    return headers.some(h => 
+      h.enabled && h.key && 
+      ((h.key.includes('{{') && h.key.includes('}}')) || 
+       (h.value && h.value.includes('{{') && h.value.includes('}}')))
+    );
+  }
+
+  let previewHeaders = {};
+  
+  function updateHeadersPreview() {
+    previewHeaders = buildHeadersPreview();
+  }
+
+  // Update headers preview when headers or variables change
+  $: if (headers || variables) updateHeadersPreview();
 
   // Process template variables in a string (frontend version)
   function processTemplate(input, vars) {
@@ -157,46 +184,32 @@
     const currentParams = params.filter(p => p.key && p.key.trim());
     const lastParams = lastSavedState.params || [];
     
+    const currentHeaders = headers.filter(h => h.key && h.key.trim());
+    const lastHeaders = lastSavedState.headers || [];
+    
     return (
       url !== lastSavedState.url ||
       method !== lastSavedState.method ||
-      headers !== lastSavedState.headers ||
+      JSON.stringify(currentHeaders) !== JSON.stringify(lastHeaders) ||
       body !== lastSavedState.body ||
       JSON.stringify(currentParams) !== JSON.stringify(lastParams)
     );
   }
 
   $: {
-    console.log('🔍 Reactive statement triggered:');
-    console.log('  - selectedRequest:', selectedRequest?.name || 'none');
-    console.log('  - url:', url);
-    console.log('  - method:', method);
-    console.log('  - isLoadingRequest:', isLoadingRequest);
-    console.log('  - hasFormChanged:', hasFormChanged());
-    
     if (selectedRequest && url && url.trim() && hasFormChanged() && !isLoadingRequest) {
       clearTimeout(urlSaveTimeout);
       saveStatus = 'pending';
       
-      console.log('🔄 Form changed, will auto-save in 2 seconds');
-      
       urlSaveTimeout = setTimeout(() => {
-        console.log('⏰ Auto-save timeout triggered');
         saveCurrentRequest();
       }, 2000); // Longer delay for auto-save, manual save button is primary
-    } else {
-      console.log('❌ Auto-save skipped - reason:');
-      if (!selectedRequest) console.log('  - No selected request');
-      if (!url || !url.trim()) console.log('  - URL is empty');
-      if (!hasFormChanged()) console.log('  - No changes detected');
-      if (isLoadingRequest) console.log('  - Currently loading request');
     }
   }
 
   // Save immediately when URL field loses focus
   function handleUrlBlur() {
     if (selectedRequest && url && url.trim() && hasFormChanged()) {
-      console.log('👆 URL field lost focus, saving immediately:', url);
       clearTimeout(urlSaveTimeout);
       saveCurrentRequest();
     }
@@ -219,17 +232,11 @@
       return;
     }
 
-    if (!headersValid) {
-      alert('Headers must be valid JSON');
-      return;
-    }
-
-    let parsedHeaders = {};
-    try {
-      parsedHeaders = JSON.parse(headers);
-    } catch {
-      parsedHeaders = {};
-    }
+    // Convert headers array to object
+    const parsedHeaders = {};
+    headers.filter(h => h.enabled && h.key && h.key.trim()).forEach(header => {
+      parsedHeaders[header.key.trim()] = header.value || '';
+    });
 
     // For API requests, we DO want to use the processed URL with variables substituted
     const processedUrl = buildUrlWithParams();
@@ -270,12 +277,11 @@
       return;
     }
     
-    let parsedHeaders = {};
-    try {
-      parsedHeaders = JSON.parse(headers);
-    } catch {
-      parsedHeaders = {};
-    }
+    // Convert headers array to object for saving
+    const parsedHeaders = {};
+    headers.filter(h => h.enabled && h.key && h.key.trim()).forEach(header => {
+      parsedHeaders[header.key.trim()] = header.value || '';
+    });
 
     // Clear any pending URL save timeout since we're saving now
     clearTimeout(urlSaveTimeout);
@@ -302,7 +308,7 @@
     lastSavedState = {
       url: url,
       method: method,
-      headers: headers,
+      headers: [...headers.filter(h => h.key && h.key.trim())],
       body: body,
       params: [...params.filter(p => p.key && p.key.trim())]
     };
@@ -318,41 +324,30 @@
     }, 200);
   }
 
-  function addCommonHeader(header) {
-    try {
-      const currentHeaders = JSON.parse(headers);
-      let newHeader = {};
-      
-      switch(header) {
-        case 'auth':
-          newHeader = { "Authorization": "Bearer YOUR_TOKEN_HERE" };
-          break;
-        case 'json':
-          newHeader = { "Content-Type": "application/json" };
-          break;
-        case 'form':
-          newHeader = { "Content-Type": "application/x-www-form-urlencoded" };
-          break;
-      }
-      
-      const merged = { ...currentHeaders, ...newHeader };
-      headers = JSON.stringify(merged, null, 2);
-      validateHeaders();
-    } catch {
-      // If headers aren't valid JSON, replace them
-      headers = JSON.stringify(newHeader, null, 2);
-      validateHeaders();
+  function addCommonHeader(headerType) {
+    let newHeader = { key: '', value: '', enabled: true };
+    
+    switch(headerType) {
+      case 'auth':
+        newHeader = { key: 'Authorization', value: 'Bearer YOUR_TOKEN_HERE', enabled: true };
+        break;
+      case 'json':
+        newHeader = { key: 'Content-Type', value: 'application/json', enabled: true };
+        break;
+      case 'form':
+        newHeader = { key: 'Content-Type', value: 'application/x-www-form-urlencoded', enabled: true };
+        break;
     }
+    
+    headers = [...headers, newHeader];
   }
-
-  $: validateHeaders();
 
 
 
   function loadRequestData(event) {
     const data = event.detail;
     
-    console.log('📥 Loading request data:', data);
+    console.log('📥 FORM LOADING URL:', data.url);
     
     // Set loading flag to prevent auto-save during load
     isLoadingRequest = true;
@@ -369,11 +364,15 @@
     method = data.method || 'GET';
     body = data.body || '';
     
-    // Handle headers
+    // Handle headers - convert from object to array format
     if (data.headers && Object.keys(data.headers).length > 0) {
-      headers = JSON.stringify(data.headers, null, 2);
+      headers = Object.entries(data.headers).map(([key, value]) => ({
+        key: key,
+        value: value,
+        enabled: true
+      }));
     } else {
-      headers = '{\n  "Content-Type": "application/json"\n}';
+      headers = [{ key: 'Content-Type', value: 'application/json', enabled: true }];
     }
     
     // Handle params
@@ -387,15 +386,14 @@
       params = [{ key: '', value: '', enabled: true }];
     }
     
-    // Update preview and validate
+    // Update preview
     updatePreview();
-    validateHeaders();
     
     // Initialize saved state tracking
     lastSavedState = {
       url: newUrl,
       method: method,
-      headers: headers,
+      headers: [...headers.filter(h => h.key && h.key.trim())],
       body: body,
       params: [...params.filter(p => p.key && p.key.trim())]
     };
@@ -491,24 +489,68 @@
         <div class="tab-content">
           {#if activeTab === 'headers'}
             <div class="tab-panel">
-              <div class="headers-label">
-                <label for="headers">Headers (JSON)</label>
+              <div class="headers-header">
+                <span>HTTP Headers</span>
                 <div class="header-shortcuts">
                   <button type="button" class="btn-small" on:click={() => addCommonHeader('json')}>+ JSON</button>
                   <button type="button" class="btn-small" on:click={() => addCommonHeader('form')}>+ Form</button>
                   <button type="button" class="btn-small" on:click={() => addCommonHeader('auth')}>+ Auth</button>
+                  <button type="button" class="btn-small" on:click={addHeader}>+ Add Header</button>
                 </div>
               </div>
-              <textarea 
-                id="headers"
-                bind:value={headers} 
-                placeholder="Headers in JSON format"
-                class="textarea"
-                class:invalid={!headersValid}
-                rows="6"
-              ></textarea>
-              {#if !headersValid}
-                <div class="error-message">Invalid JSON format</div>
+              
+              <div class="headers-list">
+                {#each headers as header, index}
+                  <div class="header-row">
+                    <input 
+                      type="checkbox" 
+                      bind:checked={header.enabled}
+                      class="header-checkbox"
+                    />
+                    <input 
+                      type="text" 
+                      bind:value={header.key}
+                      placeholder="Header Name"
+                      class="input header-input"
+                    />
+                    <input 
+                      type="text" 
+                      bind:value={header.value}
+                      placeholder="Header Value"
+                      class="input header-input"
+                    />
+                    <button 
+                      type="button" 
+                      class="btn-remove"
+                      on:click={() => removeHeader(index)}
+                      disabled={headers.length === 1}
+                    >
+                      ❌
+                    </button>
+                  </div>
+                {/each}
+              </div>
+
+              <!-- Headers Preview -->
+              {#if Object.keys(previewHeaders).length > 0}
+                <div class="headers-preview">
+                  <div class="preview-header">
+                    <span>Preview Headers:</span>
+                    {#if hasHeaderVariables()}
+                      <div class="preview-info">
+                        <small class="template-info">✨ Variables substituted</small>
+                      </div>
+                    {/if}
+                  </div>
+                  <div class="preview-content">
+                    {#each Object.entries(previewHeaders) as [key, value]}
+                      <div class="preview-header-row">
+                        <span class="preview-key">{key}:</span>
+                        <span class="preview-value">{value}</span>
+                      </div>
+                    {/each}
+                  </div>
+                </div>
               {/if}
             </div>
           {/if}
@@ -594,7 +636,7 @@
         {/if}
       </button>
 
-      <button type="submit" class="btn btn-primary" disabled={loading || !headersValid || !canSend}>
+      <button type="submit" class="btn btn-primary" disabled={loading || !canSend}>
         {#if loading}
           🔄 Sending...
         {:else if !canSend}
@@ -618,20 +660,16 @@
 <style>
   h2 {
     margin: 0 0 1.5rem 0;
-    color: #374151;
+    color: var(--text-primary, #374151);
     font-size: 1.5rem;
   }
 
-  .headers-label {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 0.5rem;
-  }
+
 
   .header-shortcuts {
     display: flex;
     gap: 0.5rem;
+    flex-wrap: wrap;
   }
 
   .btn-small {
@@ -692,16 +730,7 @@
     box-shadow: none;
   }
 
-  .invalid {
-    border-color: #ef4444 !important;
-    background-color: #fef2f2;
-  }
 
-  .error-message {
-    color: #ef4444;
-    font-size: 0.875rem;
-    margin-top: 0.25rem;
-  }
 
   textarea {
     font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
@@ -753,6 +782,110 @@
 
   .tab-panel {
     padding: 1.5rem;
+  }
+
+  /* Headers Styles */
+  .headers-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+  }
+
+  .headers-header span {
+    font-weight: 500;
+    color: #374151;
+    margin: 0;
+  }
+
+  .headers-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    max-height: 300px;
+    overflow-y: auto;
+  }
+
+  .header-row {
+    display: grid;
+    grid-template-columns: auto 1fr 1fr auto;
+    gap: 0.75rem;
+    align-items: center;
+    padding: 0.75rem;
+    background: #f9fafb;
+    border-radius: 6px;
+    border: 1px solid #e5e7eb;
+  }
+
+  .header-checkbox {
+    width: 18px;
+    height: 18px;
+    accent-color: #667eea;
+  }
+
+  .header-input {
+    margin: 0;
+    font-size: 0.9rem;
+  }
+
+  /* Headers Preview Styles */
+  .headers-preview {
+    margin-top: 1rem;
+    padding: 1rem;
+    background: var(--preview-bg, #f0f9ff);
+    border: 1px solid var(--preview-border, #bae6fd);
+    border-radius: 6px;
+  }
+
+  .preview-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+  }
+
+  .preview-header span {
+    font-weight: 500;
+    color: var(--preview-text, #0369a1);
+    font-size: 0.875rem;
+  }
+
+  .preview-info {
+    display: flex;
+    align-items: center;
+  }
+
+  .preview-content {
+    background: var(--bg-primary, white);
+    border: 1px solid var(--preview-border, #bae6fd);
+    border-radius: 4px;
+    padding: 0.75rem;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+
+  .preview-header-row {
+    display: flex;
+    margin-bottom: 0.5rem;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.875rem;
+  }
+
+  .preview-header-row:last-child {
+    margin-bottom: 0;
+  }
+
+  .preview-key {
+    color: #1e40af;
+    font-weight: 600;
+    min-width: 140px;
+    margin-right: 0.5rem;
+  }
+
+  .preview-value {
+    color: #059669;
+    word-break: break-all;
+    flex: 1;
   }
 
   /* Params Styles */
@@ -826,15 +959,15 @@
 
   .url-preview-top {
     padding: 1rem;
-    background: #f0f9ff;
-    border: 1px solid #bae6fd;
+    background: var(--preview-bg, #f0f9ff);
+    border: 1px solid var(--preview-border, #bae6fd);
     border-radius: 6px;
   }
 
   .url-preview-top span {
     display: block;
     font-weight: 500;
-    color: #0369a1;
+    color: var(--preview-text, #0369a1);
     margin-bottom: 0.5rem;
     font-size: 0.875rem;
   }
@@ -927,24 +1060,32 @@
 
   /* Custom scrollbar styling */
   .tab-content::-webkit-scrollbar,
-  .params-list::-webkit-scrollbar {
+  .params-list::-webkit-scrollbar,
+  .headers-list::-webkit-scrollbar,
+  .preview-content::-webkit-scrollbar {
     width: 8px;
   }
 
   .tab-content::-webkit-scrollbar-track,
-  .params-list::-webkit-scrollbar-track {
+  .params-list::-webkit-scrollbar-track,
+  .headers-list::-webkit-scrollbar-track,
+  .preview-content::-webkit-scrollbar-track {
     background: #f1f5f9;
     border-radius: 4px;
   }
 
   .tab-content::-webkit-scrollbar-thumb,
-  .params-list::-webkit-scrollbar-thumb {
+  .params-list::-webkit-scrollbar-thumb,
+  .headers-list::-webkit-scrollbar-thumb,
+  .preview-content::-webkit-scrollbar-thumb {
     background: #cbd5e1;
     border-radius: 4px;
   }
 
   .tab-content::-webkit-scrollbar-thumb:hover,
-  .params-list::-webkit-scrollbar-thumb:hover {
+  .params-list::-webkit-scrollbar-thumb:hover,
+  .headers-list::-webkit-scrollbar-thumb:hover,
+  .preview-content::-webkit-scrollbar-thumb:hover {
     background: #94a3b8;
   }
 </style>

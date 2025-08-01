@@ -14,6 +14,9 @@ import (
 	"sync"
 	"text/template"
 	"time"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 )
 
 type ProxyRequest struct {
@@ -62,20 +65,26 @@ type SavedRequestsData struct {
 }
 
 func main() {
+	// Create a new chi router
+	r := chi.NewRouter()
 
-	// Create a new ServeMux
-	mux := http.NewServeMux()
+	// Global middleware
+	r.Use(corsMiddleware)
+	r.Use(loggingMiddleware)
+	r.Use(middleware.Recoverer) // Built-in chi middleware for panic recovery
 
-	// API endpoints
-	mux.HandleFunc("/api/proxy", enableCORS(handleProxy))
-	mux.HandleFunc("/api/health", enableCORS(handleHealth))
-	mux.HandleFunc("/api/requests", enableCORS(handleRequests))
-	mux.HandleFunc("/api/requests/save", enableCORS(handleSaveRequest))
-	mux.HandleFunc("/api/requests/update", enableCORS(handleUpdateRequest))
-	mux.HandleFunc("/api/requests/delete", enableCORS(handleDeleteRequest))
-	mux.HandleFunc("/api/requests/duplicate", enableCORS(handleDuplicateRequest))
-	mux.HandleFunc("/api/variables", enableCORS(handleVariables))
-	mux.HandleFunc("/api/variables/save", enableCORS(handleSaveVariables))
+	// API routes group
+	r.Route("/api", func(r chi.Router) {
+		r.Post("/proxy", handleProxy)
+		r.Get("/health", handleHealth)
+		r.Get("/requests", handleRequests)
+		r.Post("/requests/save", handleSaveRequest)
+		r.Put("/requests/update", handleUpdateRequest)
+		r.Delete("/requests/delete", handleDeleteRequest)
+		r.Post("/requests/duplicate", handleDuplicateRequest)
+		r.Get("/variables", handleVariables)
+		r.Post("/variables/save", handleSaveVariables)
+	})
 
 	// Check if frontend/dist exists
 	if _, err := os.Stat("frontend/dist"); os.IsNotExist(err) {
@@ -84,7 +93,7 @@ func main() {
 	}
 
 	// Serve static files from frontend/dist directory
-	mux.Handle("/", http.FileServer(http.Dir("frontend/dist/")))
+	r.Handle("/*", http.FileServer(http.Dir("frontend/dist/")))
 
 	port := "8080"
 	if p := os.Getenv("PORT"); p != "" {
@@ -99,16 +108,30 @@ func main() {
 
 	log.Printf("Server listening on port %s", port)
 
-	// Wrap mux with logging middleware
-	handler := loggingMiddleware(mux)
-
-	err := http.ListenAndServe(":"+port, handler)
+	err := http.ListenAndServe(":"+port, r)
 	if err != nil {
 		log.Printf("❌ Server failed to start: %v", err)
 		fmt.Println("\nPress Enter to exit...")
 		fmt.Scanln()
 		os.Exit(1)
 	}
+}
+
+// corsMiddleware handles CORS headers
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+		// Handle preflight requests
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }
 
 // loggingMiddleware logs HTTP requests
@@ -134,23 +157,6 @@ type responseWrapper struct {
 func (rw *responseWrapper) WriteHeader(code int) {
 	rw.statusCode = code
 	rw.ResponseWriter.WriteHeader(code)
-}
-
-// enableCORS wraps handlers with CORS headers
-func enableCORS(handler http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-
-		// Handle preflight requests
-		if r.Method == "OPTIONS" {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-
-		handler(w, r)
-	}
 }
 
 // handleHealth provides a simple health check endpoint
