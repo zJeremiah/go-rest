@@ -1633,7 +1633,7 @@
     background: var(--button-primary);
     color: white;
     border: none;
-    padding: 0.5rem 1rem;
+    padding: 0.375rem 0.75rem;
     border-radius: 6px;
     font-size: 0.75rem;
     font-weight: 500;
@@ -2176,8 +2176,8 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 1rem;
-    padding: 0.75rem;
+    margin-bottom: 0.75rem;
+    padding: 0.5rem;
     background: var(--bg-accent);
     border-radius: 6px;
     border: 1px solid var(--border-primary);
@@ -2201,7 +2201,7 @@
     color: var(--text-primary);
     border: 1px solid var(--border-primary);
     border-radius: 4px;
-    padding: 0.375rem 0.75rem;
+    padding: 0.25rem 0.5rem;
     font-size: 0.75rem;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -2227,7 +2227,7 @@
     background: #fee2e2;
     color: #dc2626;
     border: 1px solid #fecaca;
-    padding: 0.375rem 0.75rem;
+    padding: 0.25rem 0.5rem;
     border-radius: 4px;
     cursor: pointer;
     font-size: 0.75rem;
