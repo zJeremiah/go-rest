@@ -284,7 +284,7 @@
   h2 {
     margin: 0 0 1.5rem 0;
     color: var(--text-primary, #374151);
-    font-size: 1.5rem;
+    font-size: 1.25rem;
   }
 
 
@@ -329,7 +329,7 @@
     padding: 0.5rem 1rem;
     border-radius: 6px;
     font-weight: 600;
-    font-size: 1rem;
+    font-size: 0.75rem;
   }
 
   .error-message {
@@ -353,7 +353,7 @@
 
   .header-item {
     font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     padding: 0.5rem 0;
     border-bottom: 1px solid #e5e7eb;
     display: flex;
@@ -384,7 +384,7 @@
     padding: 0.25rem 0.5rem;
     border-radius: 4px;
     cursor: pointer;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     transition: all 0.2s ease;
   }
 
@@ -420,7 +420,7 @@
     border: none;
     background: transparent;
     cursor: pointer;
-    font-size: 0.9rem;
+    font-size: 0.8rem;
     font-weight: 500;
     color: #6b7280;
     transition: all 0.2s ease;
@@ -498,7 +498,7 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     color: #374151;
     cursor: pointer;
   }
@@ -532,7 +532,7 @@
 
   .response-body code {
     font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     line-height: 1.5;
   }
 
@@ -631,7 +631,7 @@
     flex-direction: column;
     gap: 0.5rem;
     font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-    font-size: 0.9rem;
+    font-size: 0.8rem;
   }
 
   .header-item {

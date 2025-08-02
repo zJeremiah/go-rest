@@ -229,7 +229,7 @@
 
   // Handle group change
   function handleGroupChange() {
-    if (selectedRequest && hasFormChanged()) {
+    if (selectedRequest) {
       clearTimeout(urlSaveTimeout);
       saveCurrentRequest();
     }
@@ -312,7 +312,8 @@
       method,
       headers: parsedHeaders,
       body: body.trim(),
-      params: params.filter(p => p.key && p.key.trim())
+      params: params.filter(p => p.key && p.key.trim()),
+      group: selectedRequest?.group || 'default'
     };
 
 
@@ -692,7 +693,7 @@
   h2 {
     margin: 0 0 1.5rem 0;
     color: var(--text-primary, #374151);
-    font-size: 1.5rem;
+    font-size: 1.25rem;
   }
 
 
@@ -710,7 +711,7 @@
     padding: 0.25rem 0.5rem;
     border-radius: 4px;
     cursor: pointer;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     transition: all 0.2s ease;
   }
 
@@ -727,7 +728,7 @@
 
   .btn-primary {
     flex: 2;
-    font-size: 1rem;
+    font-size: 0.75rem;
     padding: 0.75rem 1rem;
     border: none;
     background: var(--button-primary, #3b82f6);
@@ -761,7 +762,7 @@
     border: 1px solid #d1d5db;
     border-radius: 6px;
     padding: 0.75rem 1rem;
-    font-size: 0.9rem;
+    font-size: 0.8rem;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -789,7 +790,7 @@
 
   textarea {
     font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-    font-size: 0.9rem;
+    font-size: 0.8rem;
   }
 
   /* Tabs Styles */
@@ -811,7 +812,7 @@
     border: none;
     background: transparent;
     cursor: pointer;
-    font-size: 0.9rem;
+    font-size: 0.8rem;
     font-weight: 500;
     color: #6b7280;
     transition: all 0.2s ease;
@@ -880,7 +881,7 @@
 
   .header-input {
     margin: 0;
-    font-size: 0.9rem;
+    font-size: 0.8rem;
   }
 
   /* Headers Preview Styles */
@@ -902,7 +903,7 @@
   .preview-header span {
     font-weight: 500;
     color: var(--preview-text, #0369a1);
-    font-size: 0.875rem;
+    font-size: 0.75rem;
   }
 
   .preview-info {
@@ -923,7 +924,7 @@
     display: flex;
     margin-bottom: 0.5rem;
     font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
   }
 
   .preview-header-row:last-child {
@@ -984,7 +985,7 @@
 
   .param-input {
     margin: 0;
-    font-size: 0.9rem;
+    font-size: 0.8rem;
   }
 
   .btn-remove {
@@ -994,7 +995,7 @@
     padding: 0.5rem;
     border-radius: 4px;
     cursor: pointer;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     transition: all 0.2s ease;
     display: flex;
     align-items: center;
@@ -1024,7 +1025,7 @@
     font-weight: 500;
     color: var(--preview-text, #0369a1);
     margin-bottom: 0.5rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
   }
 
   .preview-info {
@@ -1043,7 +1044,7 @@
 
   .preview-text-top {
     font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     color: #0c4a6e;
     background: white;
     padding: 0.75rem;
@@ -1056,7 +1057,7 @@
 
   .send-hint {
     margin-top: 0.5rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     color: #6b7280;
     text-align: center;
     font-style: italic;
@@ -1064,7 +1065,7 @@
 
   .changes-hint {
     margin-top: 0.5rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     color: #d97706;
     text-align: center;
     background: #fef3c7;

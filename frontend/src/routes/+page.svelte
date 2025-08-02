@@ -201,7 +201,7 @@
         headers: requestData.headers || {},
         body: requestData.body || '',
         params: requestData.params || [],
-        group: selectedRequest.group || 'default'
+        group: requestData.group || selectedRequest.group || 'default'
       };
 
 
@@ -1510,9 +1510,10 @@
     gap: 1rem;
   }
 
-  .collection-header h2 {
+  .collection-header   h2 {
     margin: 0;
     color: var(--text-primary);
+    font-size: 1.125rem;
   }
 
   /* Theme Selector */
@@ -1523,7 +1524,7 @@
   }
 
   .theme-selector label {
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     font-weight: 500;
     color: var(--text-secondary);
     white-space: nowrap;
@@ -1535,7 +1536,7 @@
     border: 1px solid var(--border-primary);
     border-radius: 4px;
     padding: 0.375rem 0.75rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     cursor: pointer;
     transition: all 0.2s ease;
     min-width: 120px;
@@ -1566,7 +1567,7 @@
     border: none;
     padding: 0.75rem 1rem;
     border-radius: 4px;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     font-weight: 500;
     color: var(--text-secondary);
     cursor: pointer;
@@ -1614,7 +1615,7 @@
     border: none;
     padding: 0.5rem 1rem;
     border-radius: 6px;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -1646,7 +1647,7 @@
   }
 
   .empty-hint {
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     margin-top: 0.5rem;
     color: #6b7280;
   }
@@ -1700,7 +1701,7 @@
     border: none;
     padding: 0.5rem;
     cursor: pointer;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     transition: all 0.2s ease;
     display: flex;
     align-items: center;
@@ -1758,7 +1759,7 @@
   .request-name {
     font-weight: 500;
     color: var(--text-primary);
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     flex: 1;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1769,7 +1770,7 @@
     flex: 1;
     font-weight: 500;
     color: var(--text-primary);
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     border: 1px solid #3b82f6;
     border-radius: 4px;
     padding: 0.25rem 0.5rem;
@@ -1851,7 +1852,7 @@
     padding: 0.5rem;
     border: 1px solid #d1d5db;
     border-radius: 4px;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
     transition: all 0.2s ease;
   }
@@ -1942,7 +1943,7 @@
   .environment-header h3 {
     margin: 0;
     color: var(--text-primary);
-    font-size: 1rem;
+    font-size: 0.875rem;
     font-weight: 600;
   }
 
@@ -1995,7 +1996,7 @@
   }
 
   .environment-selector label {
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     color: var(--text-secondary);
     font-weight: 500;
   }
@@ -2007,7 +2008,7 @@
     border-radius: 4px;
     background: var(--bg-primary);
     color: var(--text-primary);
-    font-size: 0.875rem;
+    font-size: 0.75rem;
   }
 
   .variables-section {
@@ -2024,7 +2025,7 @@
   .variables-header h3 {
     margin: 0;
     color: var(--text-primary);
-    font-size: 1rem;
+    font-size: 0.875rem;
     font-weight: 600;
   }
 
@@ -2063,13 +2064,13 @@
   .modal-header h3 {
     margin: 0;
     color: var(--text-primary);
-    font-size: 1.125rem;
+    font-size: 1rem;
   }
 
   .modal-close {
     background: none;
     border: none;
-    font-size: 1.25rem;
+    font-size: 1.125rem;
     cursor: pointer;
     color: var(--text-secondary);
     padding: 0;
@@ -2105,7 +2106,7 @@
     border-radius: 4px;
     background: var(--bg-primary);
     color: var(--text-primary);
-    font-size: 1rem;
+    font-size: 0.875rem;
     box-sizing: border-box;
   }
 
@@ -2136,7 +2137,7 @@
   }
 
   .copy-arrow {
-    font-size: 1.5rem;
+    font-size: 1.125rem;
     color: var(--text-secondary);
     margin-top: 1.5rem;
   }
@@ -2147,7 +2148,7 @@
     padding: 0.75rem;
     border-radius: 4px;
     margin: 0;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
   }
 
   /* Group Filter Section */
@@ -2169,7 +2170,7 @@
   }
 
   .group-selector label {
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     font-weight: 500;
     color: var(--text-secondary);
     white-space: nowrap;
@@ -2181,7 +2182,7 @@
     border: 1px solid var(--border-primary);
     border-radius: 4px;
     padding: 0.375rem 0.75rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     cursor: pointer;
     transition: all 0.2s ease;
     min-width: 120px;
@@ -2209,7 +2210,7 @@
     padding: 0.375rem 0.75rem;
     border-radius: 4px;
     cursor: pointer;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     font-weight: 500;
     transition: all 0.2s ease;
   }

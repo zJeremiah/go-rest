@@ -37,14 +37,14 @@
 
   header h1 {
     margin: 0;
-    font-size: 2.5rem;
+    font-size: 2.125rem;
     font-weight: 600;
   }
 
   header p {
     margin: 0.5rem 0 0 0;
     opacity: 0.9;
-    font-size: 1.1rem;
+    font-size: 0.95rem;
   }
 
   main {
