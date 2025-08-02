@@ -11,6 +11,7 @@
       "body": "{ \"test\": \"something\", \"test2\": \"else\", \"again\": \"new\" }",
       "params": [],
       "group": "default",
+      "description": "",
       "lastResponse": {
         "status": "201 Created",
         "statusCode": 201,
@@ -20,17 +21,17 @@
           "Alt-Svc": "h3=\":443\"; ma=86400",
           "Cache-Control": "no-cache",
           "Cf-Cache-Status": "DYNAMIC",
-          "Cf-Ray": "968955bebc8d7d12-LAX",
+          "Cf-Ray": "968e5fb5dc8587ac-IAD",
           "Content-Length": "75",
           "Content-Type": "application/json; charset=utf-8",
-          "Date": "Sat, 02 Aug 2025 00:07:25 GMT",
+          "Date": "Sat, 02 Aug 2025 14:48:02 GMT",
           "Etag": "W/\"4b-8sB5PxonmhsYBOW7vwi4h2/9uSQ\"",
           "Expires": "-1",
           "Location": "https://jsonplaceholder.typicode.com/posts/101",
           "Nel": "{\"report_to\":\"heroku-nel\",\"response_headers\":[\"Via\"],\"max_age\":3600,\"success_fraction\":0.01,\"failure_fraction\":0.1}",
           "Pragma": "no-cache",
-          "Report-To": "{\"group\":\"heroku-nel\",\"endpoints\":[{\"url\":\"https://nel.heroku.com/reports?s=Cf7MoH6NKdH%2Fgooi2rPlIY3j0Byq4a%2BDM50v%2B4BapVw%3D\\u0026sid=e11707d5-02a7-43ef-b45e-2cf4d2036f7d\\u0026ts=1754093245\"}],\"max_age\":3600}",
-          "Reporting-Endpoints": "heroku-nel=\"https://nel.heroku.com/reports?s=Cf7MoH6NKdH%2Fgooi2rPlIY3j0Byq4a%2BDM50v%2B4BapVw%3D\u0026sid=e11707d5-02a7-43ef-b45e-2cf4d2036f7d\u0026ts=1754093245\"",
+          "Report-To": "{\"group\":\"heroku-nel\",\"endpoints\":[{\"url\":\"https://nel.heroku.com/reports?s=dx%2BFw65SnNasVRonDBawJpaR%2BfB93cS53LlRaVKNu4U%3D\\u0026sid=e11707d5-02a7-43ef-b45e-2cf4d2036f7d\\u0026ts=1754146082\"}],\"max_age\":3600}",
+          "Reporting-Endpoints": "heroku-nel=\"https://nel.heroku.com/reports?s=dx%2BFw65SnNasVRonDBawJpaR%2BfB93cS53LlRaVKNu4U%3D\u0026sid=e11707d5-02a7-43ef-b45e-2cf4d2036f7d\u0026ts=1754146082\"",
           "Server": "cloudflare",
           "Server-Timing": "cfCacheStatus;desc=\"DYNAMIC\"",
           "Vary": "Origin, X-HTTP-Method-Override, Accept-Encoding",
@@ -38,13 +39,13 @@
           "X-Content-Type-Options": "nosniff",
           "X-Powered-By": "Express",
           "X-Ratelimit-Limit": "1000",
-          "X-Ratelimit-Remaining": "999",
-          "X-Ratelimit-Reset": "1754093285"
+          "X-Ratelimit-Remaining": "998",
+          "X-Ratelimit-Reset": "1754146085"
         },
         "body": "{\n  \"test\": \"something\",\n  \"test2\": \"else\",\n  \"again\": \"new\",\n  \"id\": 101\n}"
       },
       "createdAt": "2025-07-30T19:37:47-06:00",
-      "updatedAt": "2025-08-01T18:07:35-06:00"
+      "updatedAt": "2025-08-02T08:48:02-06:00"
     },
     {
       "id": "bbefcdceaf51d2e5",
@@ -57,24 +58,25 @@
       "body": "",
       "params": [],
       "group": "default",
+      "description": "",
       "lastResponse": {
         "status": "200 OK",
         "statusCode": 200,
         "headers": {
           "Access-Control-Allow-Credentials": "true",
-          "Age": "3060",
+          "Age": "6043",
           "Alt-Svc": "h3=\":443\"; ma=86400",
           "Cache-Control": "max-age=43200",
           "Cf-Cache-Status": "HIT",
-          "Cf-Ray": "968933878dd6527b-LAX",
+          "Cf-Ray": "968e5fa86b4987ac-IAD",
           "Content-Type": "application/json; charset=utf-8",
-          "Date": "Fri, 01 Aug 2025 23:44:03 GMT",
+          "Date": "Sat, 02 Aug 2025 14:48:00 GMT",
           "Etag": "W/\"80-nIDrpgGIpb97HlRnMUJPolcZWGI\"",
           "Expires": "-1",
           "Nel": "{\"report_to\":\"heroku-nel\",\"response_headers\":[\"Via\"],\"max_age\":3600,\"success_fraction\":0.01,\"failure_fraction\":0.1}",
           "Pragma": "no-cache",
-          "Report-To": "{\"group\":\"heroku-nel\",\"endpoints\":[{\"url\":\"https://nel.heroku.com/reports?s=Qh5lRY3sS9yuufXAvnxcq%2BRYYjhKDZPg%2FmOY2jxYpw8%3D\\u0026sid=e11707d5-02a7-43ef-b45e-2cf4d2036f7d\\u0026ts=1753959192\"}],\"max_age\":3600}",
-          "Reporting-Endpoints": "heroku-nel=\"https://nel.heroku.com/reports?s=Qh5lRY3sS9yuufXAvnxcq%2BRYYjhKDZPg%2FmOY2jxYpw8%3D\u0026sid=e11707d5-02a7-43ef-b45e-2cf4d2036f7d\u0026ts=1753959192\"",
+          "Report-To": "{\"group\":\"heroku-nel\",\"endpoints\":[{\"url\":\"https://nel.heroku.com/reports?s=SgZRkUOX8R4AMutfnhfsvM0vR3FawUzzYHCMYMSHzfE%3D\\u0026sid=e11707d5-02a7-43ef-b45e-2cf4d2036f7d\\u0026ts=1753770209\"}],\"max_age\":3600}",
+          "Reporting-Endpoints": "heroku-nel=\"https://nel.heroku.com/reports?s=SgZRkUOX8R4AMutfnhfsvM0vR3FawUzzYHCMYMSHzfE%3D\u0026sid=e11707d5-02a7-43ef-b45e-2cf4d2036f7d\u0026ts=1753770209\"",
           "Server": "cloudflare",
           "Server-Timing": "cfCacheStatus;desc=\"HIT\"",
           "Vary": "Origin, Accept-Encoding",
@@ -83,12 +85,12 @@
           "X-Powered-By": "Express",
           "X-Ratelimit-Limit": "1000",
           "X-Ratelimit-Remaining": "999",
-          "X-Ratelimit-Reset": "1753959236"
+          "X-Ratelimit-Reset": "1753770231"
         },
         "body": "{\n  \"userId\": 1,\n  \"id\": 5,\n  \"title\": \"laboriosam mollitia et enim quasi adipisci quia provident illum\",\n  \"completed\": false\n}"
       },
       "createdAt": "2025-07-31T07:07:34-06:00",
-      "updatedAt": "2025-08-01T17:49:45-06:00"
+      "updatedAt": "2025-08-02T08:47:59-06:00"
     },
     {
       "id": "ba88edefec4adb0f",
@@ -101,6 +103,7 @@
       "body": "",
       "params": [],
       "group": "default",
+      "description": "",
       "lastResponse": {
         "status": "200 OK",
         "statusCode": 200,
@@ -109,15 +112,15 @@
           "Alt-Svc": "h3=\":443\"; ma=86400",
           "Cache-Control": "no-cache",
           "Cf-Cache-Status": "DYNAMIC",
-          "Cf-Ray": "9689337a78dc527b-LAX",
+          "Cf-Ray": "968e5f86a9d787ac-IAD",
           "Content-Type": "application/json; charset=utf-8",
-          "Date": "Fri, 01 Aug 2025 23:44:01 GMT",
+          "Date": "Sat, 02 Aug 2025 14:47:54 GMT",
           "Etag": "W/\"2-vyGp6PvFo4RvsFtPoIWeCReyIC8\"",
           "Expires": "-1",
           "Nel": "{\"report_to\":\"heroku-nel\",\"response_headers\":[\"Via\"],\"max_age\":3600,\"success_fraction\":0.01,\"failure_fraction\":0.1}",
           "Pragma": "no-cache",
-          "Report-To": "{\"group\":\"heroku-nel\",\"endpoints\":[{\"url\":\"https://nel.heroku.com/reports?s=PkWlcCDRl0DHqXmVIlSkHxQXt8CxJEp6ijZ3vJ4dhC8%3D\\u0026sid=e11707d5-02a7-43ef-b45e-2cf4d2036f7d\\u0026ts=1754091841\"}],\"max_age\":3600}",
-          "Reporting-Endpoints": "heroku-nel=\"https://nel.heroku.com/reports?s=PkWlcCDRl0DHqXmVIlSkHxQXt8CxJEp6ijZ3vJ4dhC8%3D\u0026sid=e11707d5-02a7-43ef-b45e-2cf4d2036f7d\u0026ts=1754091841\"",
+          "Report-To": "{\"group\":\"heroku-nel\",\"endpoints\":[{\"url\":\"https://nel.heroku.com/reports?s=NCda8EoWab8%2BpBF%2Ftdd7igpcih2vDQwNA5bUg1DZRcs%3D\\u0026sid=e11707d5-02a7-43ef-b45e-2cf4d2036f7d\\u0026ts=1754146074\"}],\"max_age\":3600}",
+          "Reporting-Endpoints": "heroku-nel=\"https://nel.heroku.com/reports?s=NCda8EoWab8%2BpBF%2Ftdd7igpcih2vDQwNA5bUg1DZRcs%3D\u0026sid=e11707d5-02a7-43ef-b45e-2cf4d2036f7d\u0026ts=1754146074\"",
           "Server": "cloudflare",
           "Server-Timing": "cfCacheStatus;desc=\"DYNAMIC\"",
           "Vary": "Origin, Accept-Encoding",
@@ -126,12 +129,12 @@
           "X-Powered-By": "Express",
           "X-Ratelimit-Limit": "1000",
           "X-Ratelimit-Remaining": "999",
-          "X-Ratelimit-Reset": "1754091845"
+          "X-Ratelimit-Reset": "1754146085"
         },
         "body": "{}"
       },
       "createdAt": "2025-08-01T13:00:40-06:00",
-      "updatedAt": "2025-08-01T17:49:50-06:00"
+      "updatedAt": "2025-08-02T08:47:54-06:00"
     },
     {
       "id": "f22d631ef3d83041",
@@ -150,17 +153,33 @@
         }
       ],
       "group": "task",
+      "description": "test 2",
       "lastResponse": {
         "status": "200 OK",
         "statusCode": 200,
         "headers": {
           "Content-Type": "application/json",
-          "Date": "Sat, 02 Aug 2025 14:45:59 GMT"
+          "Date": "Sat, 02 Aug 2025 15:52:45 GMT"
         },
-        "body": "{\"Status\":\"DRY RUN ONLY: no time provided using today, using default day iterator, phase found in salesforce.toml\",\"Count\":10,\"Tasks\":[{\"type\":\"task.salesforce\",\"info\":\"?group=publisher_sites\\u0026dest=gs://insights-reporting-us/pipeline/qa/salesforce\\u0026date=2025-08-02\",\"created\":\"2025-08-02T14:45:59Z\",\"id\":\"ac86afe4-2d6d-4b03-9d02-69777511ecdd\",\"meta\":\"cron=2025-08-02T14\\u0026group=publisher_sites\\u0026workflow=salesforce.toml\"},{\"type\":\"task.salesforce\",\"info\":\"?group=products\\u0026dest=gs://insights-reporting-us/pipeline/qa/salesforce\\u0026date=2025-08-02\",\"created\":\"2025-08-02T14:45:59Z\",\"id\":\"456a1c8d-8b88-4745-8e94-ea355d4c65b3\",\"meta\":\"cron=2025-08-02T14\\u0026group=products\\u0026workflow=salesforce.toml\"},{\"type\":\"task.salesforce\",\"info\":\"?group=record_types\\u0026dest=gs://insights-reporting-us/pipeline/qa/salesforce\\u0026date=2025-08-02\",\"created\":\"2025-08-02T14:45:59Z\",\"id\":\"90028a99-f2ab-4a44-bf6e-d838f899c6b7\",\"meta\":\"cron=2025-08-02T14\\u0026group=record_types\\u0026workflow=salesforce.toml\"},{\"type\":\"task.salesforce\",\"info\":\"?group=accounts\\u0026dest=gs://insights-reporting-us/pipeline/qa/salesforce\\u0026date=2025-08-02\",\"created\":\"2025-08-02T14:45:59Z\",\"id\":\"357d2b6f-a999-44a3-8652-6a02bc1cc9ec\",\"meta\":\"cron=2025-08-02T14\\u0026group=accounts\\u0026workflow=salesforce.toml\"},{\"type\":\"task.salesforce\",\"info\":\"?group=budgets\\u0026dest=gs://insights-reporting-us/pipeline/qa/salesforce\\u0026date=2025-08-02\",\"created\":\"2025-08-02T14:45:59Z\",\"id\":\"42bd773f-b78e-4917-a82b-c01c432896be\",\"meta\":\"cron=2025-08-02T14\\u0026group=budgets\\u0026workflow=salesforce.toml\"},{\"type\":\"task.salesforce\",\"info\":\"?group=contracts\\u0026dest=gs://insights-reporting-us/pipeline/qa/salesforce\\u0026date=2025-08-02\",\"created\":\"2025-08-02T14:45:59Z\",\"id\":\"00392453-4527-4974-9df2-937991422d54\",\"meta\":\"cron=2025-08-02T14\\u0026group=contracts\\u0026workflow=salesforce.toml\"},{\"type\":\"task.salesforce\",\"info\":\"?group=users_contacts\\u0026dest=gs://insights-reporting-us/pipeline/qa/salesforce\\u0026date=2025-08-02\",\"created\":\"2025-08-02T14:45:59Z\",\"id\":\"13c8cd1b-156f-43e1-ad6e-6650dc9dae2b\",\"meta\":\"cron=2025-08-02T14\\u0026group=users_contacts\\u0026workflow=salesforce.toml\"},{\"type\":\"task.salesforce\",\"info\":\"?group=entities\\u0026dest=gs://insights-reporting-us/pipeline/qa/salesforce\\u0026date=2025-08-02\",\"created\":\"2025-08-02T14:45:59Z\",\"id\":\"59055f27-9954-43b3-9677-5014f44c166f\",\"meta\":\"cron=2025-08-02T14\\u0026group=entities\\u0026workflow=salesforce.toml\"},{\"type\":\"task.salesforce\",\"info\":\"?group=programs\\u0026dest=gs://insights-reporting-us/pipeline/qa/salesforce\\u0026date=2025-08-02\",\"created\":\"2025-08-02T14:45:59Z\",\"id\":\"7e65a215-de70-47ac-8096-92ba6ba80d1a\",\"meta\":\"cron=2025-08-02T14\\u0026group=programs\\u0026workflow=salesforce.toml\"},{\"type\":\"task.salesforce\",\"info\":\"?group=account_contact_relationships\\u0026dest=gs://insights-reporting-us/pipeline/qa/salesforce\\u0026date=2025-08-02\",\"created\":\"2025-08-02T14:45:59Z\",\"id\":\"897d519b-bec9-406a-91a4-f61b0ffb7ed9\",\"meta\":\"cron=2025-08-02T14\\u0026group=account_contact_relationships\\u0026workflow=salesforce.toml\"}]}"
+        "body": "{\"Status\":\"DRY RUN ONLY: no time provided using today, using default day iterator, phase found in salesforce.toml\",\"Count\":10,\"Tasks\":[{\"type\":\"task.salesforce\",\"info\":\"?group=publisher_sites\\u0026dest=gs://insights-reporting-us/pipeline/qa/salesforce\\u0026date=2025-08-02\",\"created\":\"2025-08-02T15:52:45Z\",\"id\":\"6cce956c-8356-4702-b090-a9c3028a17fe\",\"meta\":\"cron=2025-08-02T15\\u0026group=publisher_sites\\u0026workflow=salesforce.toml\"},{\"type\":\"task.salesforce\",\"info\":\"?group=products\\u0026dest=gs://insights-reporting-us/pipeline/qa/salesforce\\u0026date=2025-08-02\",\"created\":\"2025-08-02T15:52:45Z\",\"id\":\"3d92d117-3aff-42ae-8334-1c9c2fe40db2\",\"meta\":\"cron=2025-08-02T15\\u0026group=products\\u0026workflow=salesforce.toml\"},{\"type\":\"task.salesforce\",\"info\":\"?group=record_types\\u0026dest=gs://insights-reporting-us/pipeline/qa/salesforce\\u0026date=2025-08-02\",\"created\":\"2025-08-02T15:52:45Z\",\"id\":\"4d3adf7e-3522-4195-9451-7627e75d9616\",\"meta\":\"cron=2025-08-02T15\\u0026group=record_types\\u0026workflow=salesforce.toml\"},{\"type\":\"task.salesforce\",\"info\":\"?group=accounts\\u0026dest=gs://insights-reporting-us/pipeline/qa/salesforce\\u0026date=2025-08-02\",\"created\":\"2025-08-02T15:52:45Z\",\"id\":\"20f07baf-6822-4225-bfc5-658984b9ec76\",\"meta\":\"cron=2025-08-02T15\\u0026group=accounts\\u0026workflow=salesforce.toml\"},{\"type\":\"task.salesforce\",\"info\":\"?group=budgets\\u0026dest=gs://insights-reporting-us/pipeline/qa/salesforce\\u0026date=2025-08-02\",\"created\":\"2025-08-02T15:52:45Z\",\"id\":\"9dd65a55-bdd2-4c78-9da5-de802478f14b\",\"meta\":\"cron=2025-08-02T15\\u0026group=budgets\\u0026workflow=salesforce.toml\"},{\"type\":\"task.salesforce\",\"info\":\"?group=contracts\\u0026dest=gs://insights-reporting-us/pipeline/qa/salesforce\\u0026date=2025-08-02\",\"created\":\"2025-08-02T15:52:45Z\",\"id\":\"817daa96-4dd4-4f6d-b242-486cf342d2b2\",\"meta\":\"cron=2025-08-02T15\\u0026group=contracts\\u0026workflow=salesforce.toml\"},{\"type\":\"task.salesforce\",\"info\":\"?group=users_contacts\\u0026dest=gs://insights-reporting-us/pipeline/qa/salesforce\\u0026date=2025-08-02\",\"created\":\"2025-08-02T15:52:45Z\",\"id\":\"f81c3896-c334-4d9f-83f8-77adf5b9777a\",\"meta\":\"cron=2025-08-02T15\\u0026group=users_contacts\\u0026workflow=salesforce.toml\"},{\"type\":\"task.salesforce\",\"info\":\"?group=entities\\u0026dest=gs://insights-reporting-us/pipeline/qa/salesforce\\u0026date=2025-08-02\",\"created\":\"2025-08-02T15:52:45Z\",\"id\":\"70c20371-fccb-4b7f-80a9-9b7416ec0e30\",\"meta\":\"cron=2025-08-02T15\\u0026group=entities\\u0026workflow=salesforce.toml\"},{\"type\":\"task.salesforce\",\"info\":\"?group=programs\\u0026dest=gs://insights-reporting-us/pipeline/qa/salesforce\\u0026date=2025-08-02\",\"created\":\"2025-08-02T15:52:45Z\",\"id\":\"e3e7e255-ed3e-4519-8f53-ec7e249ceff6\",\"meta\":\"cron=2025-08-02T15\\u0026group=programs\\u0026workflow=salesforce.toml\"},{\"type\":\"task.salesforce\",\"info\":\"?group=account_contact_relationships\\u0026dest=gs://insights-reporting-us/pipeline/qa/salesforce\\u0026date=2025-08-02\",\"created\":\"2025-08-02T15:52:45Z\",\"id\":\"cdbe0b80-5c9f-442a-abf1-b7b3e2cc1fc7\",\"meta\":\"cron=2025-08-02T15\\u0026group=account_contact_relationships\\u0026workflow=salesforce.toml\"}]}"
       },
       "createdAt": "2025-08-02T08:14:06-06:00",
-      "updatedAt": "2025-08-02T08:46:44-06:00"
+      "updatedAt": "2025-08-02T10:07:09-06:00"
+    },
+    {
+      "id": "c3fcfd6b9e71c0e4",
+      "name": "Auth",
+      "url": "https://api.example.com/endpoint",
+      "method": "GET",
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "body": "",
+      "params": [],
+      "group": "Signal",
+      "description": "Test",
+      "createdAt": "2025-08-02T09:53:48-06:00",
+      "updatedAt": "2025-08-02T10:06:23-06:00"
     }
   ],
   "variables": [
@@ -235,6 +254,12 @@
       "name": "task",
       "createdAt": "2025-08-02T08:08:33-06:00",
       "updatedAt": "2025-08-02T08:08:33-06:00"
+    },
+    {
+      "id": "5856747ef2de2b23",
+      "name": "Signal",
+      "createdAt": "2025-08-02T09:53:40-06:00",
+      "updatedAt": "2025-08-02T09:53:40-06:00"
     }
   ]
 }
