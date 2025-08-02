@@ -26,9 +26,18 @@
   let renamingRequestId = null;
   let newRequestName = '';
   
-  // Variables
+  // Variables and Environments
   let variables = [];
+  let environments = [];
+  let currentEnvironment = null;
   let activeCollectionTab = 'requests';
+  
+  // Environment modal states
+  let showCreateEnvironmentModal = false;
+  let showCopyEnvironmentModal = false;
+  let newEnvironmentName = '';
+  let copySourceEnvironmentId = '';
+  let copyTargetEnvironmentId = '';
   
   // Theme system
   let currentTheme = 'light';
@@ -446,6 +455,176 @@
     }
   }
 
+  // Environment management functions
+  async function loadEnvironments() {
+    try {
+      const res = await fetch('/api/environments');
+      if (res.ok) {
+        const data = await res.json();
+        environments = data.environments || [];
+        currentEnvironment = data.currentEnvironment;
+        console.log(`🌍 Loaded ${environments.length} environments, current: ${currentEnvironment}`);
+        
+        // Load variables from current environment
+        await loadVariables();
+      }
+    } catch (error) {
+      console.error('❌ Error loading environments:', error);
+    }
+  }
+
+  async function createEnvironment(name) {
+    try {
+      const res = await fetch('/api/environments', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name })
+      });
+
+      if (res.ok) {
+        const newEnv = await res.json();
+        console.log('✅ Environment created:', newEnv.name);
+        await loadEnvironments(); // Refresh environments
+        return newEnv;
+      } else {
+        const error = await res.text();
+        console.error('❌ Failed to create environment:', error);
+        throw new Error(error);
+      }
+    } catch (error) {
+      console.error('❌ Error creating environment:', error);
+      throw error;
+    }
+  }
+
+  async function deleteEnvironment(envId) {
+    try {
+      const res = await fetch(`/api/environments/${envId}`, {
+        method: 'DELETE'
+      });
+
+      if (res.ok) {
+        console.log('✅ Environment deleted');
+        await loadEnvironments(); // Refresh environments
+      } else {
+        const error = await res.text();
+        console.error('❌ Failed to delete environment:', error);
+        throw new Error(error);
+      }
+    } catch (error) {
+      console.error('❌ Error deleting environment:', error);
+      throw error;
+    }
+  }
+
+  async function activateEnvironment(envId) {
+    try {
+      const res = await fetch(`/api/environments/${envId}/activate`, {
+        method: 'POST'
+      });
+
+      if (res.ok) {
+        console.log('✅ Environment activated:', envId);
+        currentEnvironment = envId;
+        await loadVariables(); // Reload variables for new environment
+      } else {
+        const error = await res.text();
+        console.error('❌ Failed to activate environment:', error);
+        throw new Error(error);
+      }
+    } catch (error) {
+      console.error('❌ Error activating environment:', error);
+      throw error;
+    }
+  }
+
+  async function copyEnvironmentVariables(sourceEnvId, targetEnvId) {
+    try {
+      const res = await fetch(`/api/environments/${targetEnvId}/copy`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ sourceEnvironmentId: sourceEnvId })
+      });
+
+      if (res.ok) {
+        console.log('✅ Variables copied between environments');
+        if (targetEnvId === currentEnvironment) {
+          await loadVariables(); // Reload if we're copying to current environment
+        }
+      } else {
+        const error = await res.text();
+        console.error('❌ Failed to copy variables:', error);
+        throw new Error(error);
+      }
+    } catch (error) {
+      console.error('❌ Error copying variables:', error);
+      throw error;
+    }
+  }
+
+  // Environment modal handlers
+  async function handleCreateEnvironment() {
+    if (!newEnvironmentName.trim()) {
+      alert('Please enter an environment name');
+      return;
+    }
+
+    try {
+      await createEnvironment(newEnvironmentName.trim());
+      newEnvironmentName = '';
+      showCreateEnvironmentModal = false;
+    } catch (error) {
+      alert('Failed to create environment: ' + error.message);
+    }
+  }
+
+  async function handleCopyEnvironmentVariables() {
+    if (!copySourceEnvironmentId || !copyTargetEnvironmentId) {
+      alert('Please select both source and target environments');
+      return;
+    }
+
+    if (copySourceEnvironmentId === copyTargetEnvironmentId) {
+      alert('Source and target environments must be different');
+      return;
+    }
+
+    try {
+      await copyEnvironmentVariables(copySourceEnvironmentId, copyTargetEnvironmentId);
+      copySourceEnvironmentId = '';
+      copyTargetEnvironmentId = '';
+      showCopyEnvironmentModal = false;
+      alert('Variables copied successfully!');
+    } catch (error) {
+      alert('Failed to copy variables: ' + error.message);
+    }
+  }
+
+  async function handleDeleteCurrentEnvironment() {
+    if (environments.length <= 1) {
+      alert('Cannot delete the last environment');
+      return;
+    }
+
+    const currentEnv = environments.find(env => env.id === currentEnvironment);
+    if (!currentEnv) {
+      alert('Current environment not found');
+      return;
+    }
+
+    if (confirm(`Are you sure you want to delete the "${currentEnv.name}" environment? This action cannot be undone.`)) {
+      try {
+        await deleteEnvironment(currentEnvironment);
+      } catch (error) {
+        alert('Failed to delete environment: ' + error.message);
+      }
+    }
+  }
+
   function addVariable() {
     variables = [...variables, { key: '', value: '' }];
   }
@@ -607,9 +786,9 @@
       }
     }
     
-    // Load saved requests and variables from server
+    // Load saved requests and environments from server
     loadSavedRequests();
-    loadVariables();
+    loadEnvironments();
   });
 </script>
 
@@ -745,10 +924,59 @@
 
       <!-- Variables Tab Content -->
       {#if activeCollectionTab === 'variables'}
-        <div class="tab-content-header">
-          <button class="btn-add" on:click={addVariable} title="Add new variable">
-            ➕ Add Variable
-          </button>
+        <!-- Environment Management Section -->
+        <div class="environment-section">
+          <div class="environment-header">
+            <h3>🌍 Environment</h3>
+            <div class="environment-actions">
+              <button 
+                class="btn-env btn-create" 
+                on:click={() => showCreateEnvironmentModal = true}
+                title="Create new environment"
+              >
+                ➕ New
+              </button>
+              {#if environments.length > 1}
+                <button 
+                  class="btn-env btn-copy" 
+                  on:click={() => showCopyEnvironmentModal = true}
+                  title="Copy variables between environments"
+                >
+                  📋 Copy
+                </button>
+                <button 
+                  class="btn-env btn-delete" 
+                  on:click={() => handleDeleteCurrentEnvironment()}
+                  title="Delete current environment"
+                >
+                  🗑️ Delete
+                </button>
+              {/if}
+            </div>
+          </div>
+          
+          <div class="environment-selector">
+            <label for="env-select">Active Environment:</label>
+            <select 
+              id="env-select"
+              bind:value={currentEnvironment}
+              on:change={(e) => activateEnvironment(e.target.value)}
+            >
+              {#each environments as env}
+                <option value={env.id}>{env.name}</option>
+              {/each}
+            </select>
+          </div>
+        </div>
+
+        <!-- Variables Section -->
+        <div class="variables-section">
+          <div class="variables-header">
+            <h3>🔧 Variables</h3>
+            <button class="btn-add" on:click={addVariable} title="Add new variable">
+              ➕ Add Variable
+            </button>
+          </div>
         </div>
 
         {#if variables.length === 0}
@@ -831,6 +1059,71 @@
     <ResponseDisplay {response} {loading} />
   </div>
 </div>
+
+<!-- Environment Management Modals -->
+{#if showCreateEnvironmentModal}
+  <div class="modal-overlay" on:click={() => showCreateEnvironmentModal = false}>
+    <div class="modal" on:click|stopPropagation>
+      <div class="modal-header">
+        <h3>🌍 Create New Environment</h3>
+        <button class="modal-close" on:click={() => showCreateEnvironmentModal = false}>✕</button>
+      </div>
+      <div class="modal-body">
+        <label for="new-env-name">Environment Name:</label>
+        <input 
+          id="new-env-name"
+          type="text" 
+          bind:value={newEnvironmentName}
+          placeholder="e.g., Development, Staging, Production"
+          on:keydown={(e) => e.key === 'Enter' && handleCreateEnvironment()}
+        />
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" on:click={() => showCreateEnvironmentModal = false}>Cancel</button>
+        <button class="btn-primary" on:click={handleCreateEnvironment}>Create</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if showCopyEnvironmentModal}
+  <div class="modal-overlay" on:click={() => showCopyEnvironmentModal = false}>
+    <div class="modal" on:click|stopPropagation>
+      <div class="modal-header">
+        <h3>📋 Copy Variables Between Environments</h3>
+        <button class="modal-close" on:click={() => showCopyEnvironmentModal = false}>✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="copy-form">
+          <div class="form-group">
+            <label for="copy-source">From (Source):</label>
+            <select id="copy-source" bind:value={copySourceEnvironmentId}>
+              <option value="">Select source environment</option>
+              {#each environments as env}
+                <option value={env.id}>{env.name}</option>
+              {/each}
+            </select>
+          </div>
+          <div class="copy-arrow">→</div>
+          <div class="form-group">
+            <label for="copy-target">To (Target):</label>
+            <select id="copy-target" bind:value={copyTargetEnvironmentId}>
+              <option value="">Select target environment</option>
+              {#each environments as env}
+                <option value={env.id}>{env.name}</option>
+              {/each}
+            </select>
+          </div>
+        </div>
+        <p class="copy-warning">⚠️ This will replace all variables in the target environment.</p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" on:click={() => showCopyEnvironmentModal = false}>Cancel</button>
+        <button class="btn-primary" on:click={handleCopyEnvironmentVariables}>Copy Variables</button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 <style>
   /* Theme System - CSS Custom Properties */
@@ -1450,5 +1743,232 @@
   .collection-section,
   .request-section {
     transition: width 0.1s ease-out;
+  }
+
+  /* Environment Management Styles */
+  .environment-section {
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    border: 1px solid var(--border-primary);
+  }
+
+  .environment-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+  }
+
+  .environment-header h3 {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  .environment-actions {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .btn-env {
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    border: 1px solid;
+    background: transparent;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .btn-create {
+    color: var(--text-accent);
+    border-color: var(--border-accent);
+  }
+
+  .btn-create:hover {
+    background: var(--bg-accent);
+  }
+
+  .btn-copy {
+    color: #0ea5e9;
+    border-color: #0ea5e9;
+  }
+
+  .btn-copy:hover {
+    background: #e0f2fe;
+  }
+
+  .btn-delete {
+    color: #dc2626;
+    border-color: #dc2626;
+  }
+
+  .btn-delete:hover {
+    background: #fee2e2;
+  }
+
+  .environment-selector {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .environment-selector label {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+  }
+
+  .environment-selector select {
+    flex: 1;
+    padding: 0.5rem;
+    border: 1px solid var(--border-primary);
+    border-radius: 4px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 0.875rem;
+  }
+
+  .variables-section {
+    margin-top: 1rem;
+  }
+
+  .variables-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+  }
+
+  .variables-header h3 {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  /* Modal Styles */
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+  }
+
+  .modal {
+    background: var(--bg-primary);
+    border-radius: 8px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+    min-width: 400px;
+    max-width: 500px;
+    max-height: 80vh;
+    overflow: auto;
+  }
+
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    border-bottom: 1px solid var(--border-primary);
+  }
+
+  .modal-header h3 {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: 1.125rem;
+  }
+
+  .modal-close {
+    background: none;
+    border: none;
+    font-size: 1.25rem;
+    cursor: pointer;
+    color: var(--text-secondary);
+    padding: 0;
+    width: 2rem;
+    height: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+  }
+
+  .modal-close:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+  }
+
+  .modal-body {
+    padding: 1.5rem;
+  }
+
+  .modal-body label {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: var(--text-primary);
+    font-weight: 500;
+  }
+
+  .modal-body input,
+  .modal-body select {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid var(--border-primary);
+    border-radius: 4px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 1rem;
+    box-sizing: border-box;
+  }
+
+  .modal-body input:focus,
+  .modal-body select:focus {
+    outline: none;
+    border-color: var(--border-accent);
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  }
+
+  .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    padding: 1rem;
+    border-top: 1px solid var(--border-primary);
+  }
+
+  .copy-form {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .form-group {
+    flex: 1;
+  }
+
+  .copy-arrow {
+    font-size: 1.5rem;
+    color: var(--text-secondary);
+    margin-top: 1.5rem;
+  }
+
+  .copy-warning {
+    background: #fef3cd;
+    color: #997404;
+    padding: 0.75rem;
+    border-radius: 4px;
+    margin: 0;
+    font-size: 0.875rem;
   }
 </style>

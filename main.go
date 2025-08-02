@@ -57,9 +57,19 @@ type Variable struct {
 	Value string `json:"value"`
 }
 
+type Environment struct {
+	ID        string     `json:"id"`
+	Name      string     `json:"name"`
+	Variables []Variable `json:"variables"`
+	CreatedAt string     `json:"createdAt"`
+	UpdatedAt string     `json:"updatedAt"`
+}
+
 type SavedRequestsData struct {
-	Requests  []SavedRequest `json:"requests"`
-	Variables []Variable     `json:"variables"`
+	Requests           []SavedRequest `json:"requests"`
+	Variables          []Variable     `json:"variables"` // Legacy - kept for backward compatibility
+	Environments       []Environment  `json:"environments"`
+	CurrentEnvironment string         `json:"currentEnvironment"`
 }
 
 func main() {
@@ -82,6 +92,14 @@ func main() {
 		r.Post("/requests/duplicate", handleDuplicateRequest)
 		r.Get("/variables", handleVariables)
 		r.Post("/variables/save", handleSaveVariables)
+
+		// Environment management endpoints
+		r.Get("/environments", handleEnvironments)
+		r.Post("/environments", handleCreateEnvironment)
+		r.Put("/environments/{id}", handleUpdateEnvironment)
+		r.Delete("/environments/{id}", handleDeleteEnvironment)
+		r.Post("/environments/{id}/copy", handleCopyEnvironment)
+		r.Post("/environments/{id}/activate", handleActivateEnvironment)
 	})
 
 	// Check if frontend/dist exists
@@ -196,6 +214,24 @@ func handleProxy(w http.ResponseWriter, r *http.Request) {
 	if req.Method == "" {
 		req.Method = "GET"
 	}
+
+	// Get variables from current environment for template processing
+	data, err := loadSavedRequests()
+	if err != nil {
+		log.Printf("❌ Failed to load environment data: %v", err)
+		respondWithError(w, "Failed to load environment data", http.StatusInternalServerError)
+		return
+	}
+
+	currentEnv, err := getCurrentEnvironment(data)
+	if err != nil {
+		log.Printf("❌ Failed to get current environment: %v", err)
+		respondWithError(w, "Failed to get current environment", http.StatusInternalServerError)
+		return
+	}
+
+	// Use environment variables instead of request variables for template processing
+	req.Variables = currentEnv.Variables
 
 	// Apply template processing to substitute variables
 	processedReq := processRequestTemplates(req)
@@ -366,15 +402,72 @@ func processRequestTemplates(req ProxyRequest) ProxyRequest {
 	return req
 }
 
+// initializeDefaultEnvironment creates a default environment
+func initializeDefaultEnvironment(data *SavedRequestsData) *SavedRequestsData {
+	now := time.Now().Format(time.RFC3339)
+	defaultEnv := Environment{
+		ID:        generateID(),
+		Name:      "Default",
+		Variables: []Variable{},
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	data.Environments = []Environment{defaultEnv}
+	data.CurrentEnvironment = defaultEnv.ID
+	return data
+}
+
+// migrateVariablesToEnvironments migrates legacy variables to default environment
+func migrateVariablesToEnvironments(data *SavedRequestsData) *SavedRequestsData {
+	now := time.Now().Format(time.RFC3339)
+	defaultEnv := Environment{
+		ID:        generateID(),
+		Name:      "Default",
+		Variables: make([]Variable, len(data.Variables)),
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	// Copy legacy variables to default environment
+	copy(defaultEnv.Variables, data.Variables)
+
+	data.Environments = []Environment{defaultEnv}
+	data.CurrentEnvironment = defaultEnv.ID
+
+	log.Printf("📦 Migrated %d variables to Default environment", len(data.Variables))
+	return data
+}
+
+// getCurrentEnvironment returns the current active environment
+func getCurrentEnvironment(data *SavedRequestsData) (*Environment, error) {
+	if data.CurrentEnvironment == "" && len(data.Environments) > 0 {
+		data.CurrentEnvironment = data.Environments[0].ID
+	}
+
+	for i := range data.Environments {
+		if data.Environments[i].ID == data.CurrentEnvironment {
+			return &data.Environments[i], nil
+		}
+	}
+
+	return nil, fmt.Errorf("current environment not found")
+}
+
 // loadSavedRequests reads saved requests from JSON file
 func loadSavedRequests() (*SavedRequestsData, error) {
 	fileAccessMutex.RLock()
 	defer fileAccessMutex.RUnlock()
 
-	data := &SavedRequestsData{Requests: []SavedRequest{}, Variables: []Variable{}}
+	data := &SavedRequestsData{
+		Requests:     []SavedRequest{},
+		Variables:    []Variable{},
+		Environments: []Environment{},
+	}
 
 	if _, err := os.Stat(requestsFileName); os.IsNotExist(err) {
-		// File doesn't exist, return empty data
+		// File doesn't exist, create default environment
+		data = initializeDefaultEnvironment(data)
 		return data, nil
 	}
 
@@ -384,20 +477,42 @@ func loadSavedRequests() (*SavedRequestsData, error) {
 	}
 
 	if len(file) == 0 {
-		// Empty file, return empty data
+		// Empty file, create default environment
+		data = initializeDefaultEnvironment(data)
 		return data, nil
 	}
 
 	if err := json.Unmarshal(file, data); err != nil {
 		log.Printf("⚠️  JSON parse error in %s: %v", requestsFileName, err)
 		log.Printf("🔧 Attempting to recover by creating new empty file")
-		// If JSON is corrupted, create a new empty file
+		// If JSON is corrupted, create a new file with default environment
+		data = initializeDefaultEnvironment(data)
 		return data, nil
 	}
 
-	// Ensure variables array is not nil
+	// Ensure variables array is not nil (backward compatibility)
 	if data.Variables == nil {
 		data.Variables = []Variable{}
+	}
+
+	// Ensure environments array is not nil
+	if data.Environments == nil {
+		data.Environments = []Environment{}
+	}
+
+	// Migration: If we have legacy variables but no environments, migrate them
+	if len(data.Variables) > 0 && len(data.Environments) == 0 {
+		data = migrateVariablesToEnvironments(data)
+	}
+
+	// Ensure we have at least a default environment
+	if len(data.Environments) == 0 {
+		data = initializeDefaultEnvironment(data)
+	}
+
+	// Ensure current environment is set
+	if data.CurrentEnvironment == "" && len(data.Environments) > 0 {
+		data.CurrentEnvironment = data.Environments[0].ID
 	}
 
 	return data, nil
@@ -797,7 +912,7 @@ func handleDuplicateRequest(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleVariables handles GET requests to retrieve all variables
+// handleVariables handles GET requests to retrieve variables from current environment
 func handleVariables(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -811,13 +926,21 @@ func handleVariables(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get current environment
+	currentEnv, err := getCurrentEnvironment(data)
+	if err != nil {
+		log.Printf("❌ Failed to get current environment: %v", err)
+		respondWithError(w, "Failed to get current environment", http.StatusInternalServerError)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(map[string][]Variable{"variables": data.Variables}); err != nil {
+	if err := json.NewEncoder(w).Encode(map[string][]Variable{"variables": currentEnv.Variables}); err != nil {
 		log.Printf("❌ Failed to encode variables: %v", err)
 	}
 }
 
-// handleSaveVariables handles POST requests to save variables
+// handleSaveVariables handles POST requests to save variables to current environment
 func handleSaveVariables(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -842,8 +965,22 @@ func handleSaveVariables(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update variables
-	data.Variables = req.Variables
+	// Find and update current environment
+	found := false
+	for i := range data.Environments {
+		if data.Environments[i].ID == data.CurrentEnvironment {
+			data.Environments[i].Variables = req.Variables
+			data.Environments[i].UpdatedAt = time.Now().Format(time.RFC3339)
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		log.Printf("❌ Current environment not found: %s", data.CurrentEnvironment)
+		respondWithError(w, "Current environment not found", http.StatusInternalServerError)
+		return
+	}
 
 	// Save to file
 	if err := saveSavedRequests(data); err != nil {
@@ -852,11 +989,376 @@ func handleSaveVariables(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("✅ Saved %d variables", len(req.Variables))
+	log.Printf("✅ Saved %d variables to environment %s", len(req.Variables), data.CurrentEnvironment)
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(map[string]string{"status": "saved"}); err != nil {
 		log.Printf("❌ Failed to encode variables response: %v", err)
+	}
+}
+
+// handleEnvironments handles GET requests to list all environments
+func handleEnvironments(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	data, err := loadSavedRequests()
+	if err != nil {
+		log.Printf("❌ Failed to load environments: %v", err)
+		respondWithError(w, "Failed to load environments", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	response := map[string]interface{}{
+		"environments":       data.Environments,
+		"currentEnvironment": data.CurrentEnvironment,
+	}
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("❌ Failed to encode environments: %v", err)
+	}
+}
+
+// handleCreateEnvironment handles POST requests to create a new environment
+func handleCreateEnvironment(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Name string `json:"name"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("❌ Invalid request body for create environment: %v", err)
+		respondWithError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Name == "" {
+		respondWithError(w, "Environment name is required", http.StatusBadRequest)
+		return
+	}
+
+	// Load existing data
+	data, err := loadSavedRequests()
+	if err != nil {
+		log.Printf("❌ Failed to load saved data: %v", err)
+		respondWithError(w, "Failed to load saved data", http.StatusInternalServerError)
+		return
+	}
+
+	// Check if environment name already exists
+	for _, env := range data.Environments {
+		if env.Name == req.Name {
+			respondWithError(w, "Environment name already exists", http.StatusConflict)
+			return
+		}
+	}
+
+	// Create new environment
+	now := time.Now().Format(time.RFC3339)
+	newEnv := Environment{
+		ID:        generateID(),
+		Name:      req.Name,
+		Variables: []Variable{},
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	data.Environments = append(data.Environments, newEnv)
+
+	// Save to file
+	if err := saveSavedRequests(data); err != nil {
+		log.Printf("❌ Failed to save environment: %v", err)
+		respondWithError(w, "Failed to save environment", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("✅ Created environment: %s (%s)", newEnv.Name, newEnv.ID)
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(newEnv); err != nil {
+		log.Printf("❌ Failed to encode environment response: %v", err)
+	}
+}
+
+// handleUpdateEnvironment handles PUT requests to update an environment
+func handleUpdateEnvironment(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	envID := chi.URLParam(r, "id")
+	if envID == "" {
+		respondWithError(w, "Environment ID is required", http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		Name      string     `json:"name"`
+		Variables []Variable `json:"variables"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("❌ Invalid request body for update environment: %v", err)
+		respondWithError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Load existing data
+	data, err := loadSavedRequests()
+	if err != nil {
+		log.Printf("❌ Failed to load saved data: %v", err)
+		respondWithError(w, "Failed to load saved data", http.StatusInternalServerError)
+		return
+	}
+
+	// Find and update environment
+	found := false
+	for i := range data.Environments {
+		if data.Environments[i].ID == envID {
+			if req.Name != "" {
+				// Check if new name conflicts with existing environments
+				for j, env := range data.Environments {
+					if j != i && env.Name == req.Name {
+						respondWithError(w, "Environment name already exists", http.StatusConflict)
+						return
+					}
+				}
+				data.Environments[i].Name = req.Name
+			}
+			if req.Variables != nil {
+				data.Environments[i].Variables = req.Variables
+			}
+			data.Environments[i].UpdatedAt = time.Now().Format(time.RFC3339)
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		respondWithError(w, "Environment not found", http.StatusNotFound)
+		return
+	}
+
+	// Save to file
+	if err := saveSavedRequests(data); err != nil {
+		log.Printf("❌ Failed to save environment: %v", err)
+		respondWithError(w, "Failed to save environment", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("✅ Updated environment: %s", envID)
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]string{"status": "updated"}); err != nil {
+		log.Printf("❌ Failed to encode environment response: %v", err)
+	}
+}
+
+// handleDeleteEnvironment handles DELETE requests to delete an environment
+func handleDeleteEnvironment(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	envID := chi.URLParam(r, "id")
+	if envID == "" {
+		respondWithError(w, "Environment ID is required", http.StatusBadRequest)
+		return
+	}
+
+	// Load existing data
+	data, err := loadSavedRequests()
+	if err != nil {
+		log.Printf("❌ Failed to load saved data: %v", err)
+		respondWithError(w, "Failed to load saved data", http.StatusInternalServerError)
+		return
+	}
+
+	// Don't allow deleting the last environment
+	if len(data.Environments) <= 1 {
+		respondWithError(w, "Cannot delete the last environment", http.StatusBadRequest)
+		return
+	}
+
+	// Find and remove environment
+	found := false
+	newEnvironments := []Environment{}
+	for _, env := range data.Environments {
+		if env.ID != envID {
+			newEnvironments = append(newEnvironments, env)
+		} else {
+			found = true
+		}
+	}
+
+	if !found {
+		respondWithError(w, "Environment not found", http.StatusNotFound)
+		return
+	}
+
+	data.Environments = newEnvironments
+
+	// If we deleted the current environment, switch to the first available
+	if data.CurrentEnvironment == envID {
+		data.CurrentEnvironment = data.Environments[0].ID
+	}
+
+	// Save to file
+	if err := saveSavedRequests(data); err != nil {
+		log.Printf("❌ Failed to save environments: %v", err)
+		respondWithError(w, "Failed to save environments", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("✅ Deleted environment: %s", envID)
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]string{"status": "deleted"}); err != nil {
+		log.Printf("❌ Failed to encode environment response: %v", err)
+	}
+}
+
+// handleCopyEnvironment handles POST requests to copy variables between environments
+func handleCopyEnvironment(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	targetEnvID := chi.URLParam(r, "id")
+	if targetEnvID == "" {
+		respondWithError(w, "Target environment ID is required", http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		SourceEnvironmentID string `json:"sourceEnvironmentId"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("❌ Invalid request body for copy environment: %v", err)
+		respondWithError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.SourceEnvironmentID == "" {
+		respondWithError(w, "Source environment ID is required", http.StatusBadRequest)
+		return
+	}
+
+	// Load existing data
+	data, err := loadSavedRequests()
+	if err != nil {
+		log.Printf("❌ Failed to load saved data: %v", err)
+		respondWithError(w, "Failed to load saved data", http.StatusInternalServerError)
+		return
+	}
+
+	// Find source environment
+	var sourceEnv *Environment
+	for _, env := range data.Environments {
+		if env.ID == req.SourceEnvironmentID {
+			sourceEnv = &env
+			break
+		}
+	}
+
+	if sourceEnv == nil {
+		respondWithError(w, "Source environment not found", http.StatusNotFound)
+		return
+	}
+
+	// Find and update target environment
+	found := false
+	for i := range data.Environments {
+		if data.Environments[i].ID == targetEnvID {
+			// Copy variables from source to target
+			data.Environments[i].Variables = make([]Variable, len(sourceEnv.Variables))
+			copy(data.Environments[i].Variables, sourceEnv.Variables)
+			data.Environments[i].UpdatedAt = time.Now().Format(time.RFC3339)
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		respondWithError(w, "Target environment not found", http.StatusNotFound)
+		return
+	}
+
+	// Save to file
+	if err := saveSavedRequests(data); err != nil {
+		log.Printf("❌ Failed to save environment: %v", err)
+		respondWithError(w, "Failed to save environment", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("✅ Copied %d variables from %s to %s", len(sourceEnv.Variables), req.SourceEnvironmentID, targetEnvID)
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]string{"status": "copied"}); err != nil {
+		log.Printf("❌ Failed to encode copy response: %v", err)
+	}
+}
+
+// handleActivateEnvironment handles POST requests to activate an environment
+func handleActivateEnvironment(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	envID := chi.URLParam(r, "id")
+	if envID == "" {
+		respondWithError(w, "Environment ID is required", http.StatusBadRequest)
+		return
+	}
+
+	// Load existing data
+	data, err := loadSavedRequests()
+	if err != nil {
+		log.Printf("❌ Failed to load saved data: %v", err)
+		respondWithError(w, "Failed to load saved data", http.StatusInternalServerError)
+		return
+	}
+
+	// Check if environment exists
+	found := false
+	for _, env := range data.Environments {
+		if env.ID == envID {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		respondWithError(w, "Environment not found", http.StatusNotFound)
+		return
+	}
+
+	// Set as current environment
+	data.CurrentEnvironment = envID
+
+	// Save to file
+	if err := saveSavedRequests(data); err != nil {
+		log.Printf("❌ Failed to save current environment: %v", err)
+		respondWithError(w, "Failed to save current environment", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("✅ Activated environment: %s", envID)
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]string{"status": "activated"}); err != nil {
+		log.Printf("❌ Failed to encode activation response: %v", err)
 	}
 }
 
