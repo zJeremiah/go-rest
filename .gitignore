@@ -1,0 +1,83 @@
+# Go build artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+gorest
+gorest.exe
+api-tester
+
+# Go test files
+*.test
+*.out
+
+.specstory/
+
+# Frontend build artifacts
+frontend/dist/
+frontend/.svelte-kit/
+frontend/build/
+frontend/vite.config.js.timestamp-*
+
+# Node.js dependencies
+frontend/node_modules/
+
+# Node.js logs
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDE and editor files
+.vscode/settings.json
+.vscode/launch.json
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Backup files
+*.bak
+*.backup
+
+# Database files (if any)
+*.db
+*.sqlite
+*.sqlite3
+
+# Request data file - user data should not be tracked in version control
+saved_requests.json
