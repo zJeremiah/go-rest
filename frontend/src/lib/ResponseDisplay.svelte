@@ -416,7 +416,7 @@
 
   .tab-button {
     flex: 1;
-    padding: 1rem;
+    padding: 0.75rem;
     border: none;
     background: transparent;
     cursor: pointer;
@@ -461,7 +461,7 @@
   }
 
   .tab-panel {
-    padding: 1.5rem;
+    padding: 1rem;
   }
 
   .body-header {
