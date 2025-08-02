@@ -868,4 +868,17 @@
     border-color: var(--border-secondary);
     border-top-color: var(--text-accent);
   }
+
+  /* Dark theme overrides for plain text responses */
+  :global([data-theme="dark"]) .plain-text {
+    color: #e5e7eb !important;
+    background: transparent !important;
+  }
+
+  /* Override hardcoded light theme colors for plain text in dark mode */
+  :global([data-theme="dark"]) .response-body pre:not(.hljs),
+  :global([data-theme="dark"]) .response-body code:not(.hljs) {
+    color: #e5e7eb !important;
+    background: var(--bg-primary) !important;
+  }
 </style>

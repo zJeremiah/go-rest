@@ -410,16 +410,32 @@
     const currentBodyContent = buildRawBodyContent();
     const lastBodyContent = lastSavedState.bodyContent || '';
     
+    // Normalize content for comparison (handle objects, strings, and formatting)
+    const normalizeContent = (content) => {
+      if (content === null || content === undefined) return '';
+      if (typeof content === 'object') {
+        return JSON.stringify(content);
+      }
+      if (typeof content === 'string' && content.trim().startsWith('{')) {
+        try {
+          return JSON.stringify(JSON.parse(content));
+        } catch {
+          return content;
+        }
+      }
+      return String(content);
+    };
+    
     return (
       url !== lastSavedState.url ||
       method !== lastSavedState.method ||
       JSON.stringify(currentHeaders) !== JSON.stringify(lastHeaders) ||
-      currentBodyContent !== lastBodyContent ||
+      normalizeContent(currentBodyContent) !== normalizeContent(lastBodyContent) ||
       bodyType !== lastSavedState.bodyType ||
       JSON.stringify(currentJsonFields) !== JSON.stringify(lastJsonFields) ||
       JSON.stringify(currentFormFields) !== JSON.stringify(lastFormFields) ||
       JSON.stringify(currentParams) !== JSON.stringify(lastParams) ||
-      description !== lastSavedState.description
+      (description || '') !== (lastSavedState.description || '')
     );
   }
 
@@ -614,11 +630,23 @@
     
     url = newUrl;
     method = data.method || 'GET';
-    body = data.body || '';
     description = data.description || '';
     
+    // Handle body content - convert objects to strings properly
+    let bodyContent = '';
+    if (data.body) {
+      if (typeof data.body === 'object' && data.body !== null) {
+        bodyContent = JSON.stringify(data.body, null, 2);
+        body = bodyContent;
+      } else {
+        bodyContent = String(data.body).trim();
+        body = data.body;
+      }
+    } else {
+      body = '';
+    }
+    
     // Detect body type and parse fields
-    const bodyContent = body.trim();
     if (bodyContent) {
       // Try to detect if it's JSON
       try {
