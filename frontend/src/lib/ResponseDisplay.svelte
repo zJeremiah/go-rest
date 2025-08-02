@@ -79,26 +79,21 @@
 
   // Update highlighting when response changes
   $: if (responseBodyElement && response && response.body !== lastResponseBody) {
-    console.log('🔄 Response body changed, triggering highlighting:', { 
-      hasElement: !!responseBodyElement, 
-      hasResponse: !!response, 
-      bodyLength: response.body?.length || 0,
-      lastBodyLength: lastResponseBody?.length || 0
-    });
+
     lastResponseBody = response.body || '';
     updateHighlighting();
   }
 
   // Handle tab switching to body tab
   $: if (activeTab === 'body' && response?.body && responseBodyElement) {
-    console.log('🔄 Switched to body tab, refreshing content');
+
     // Use setTimeout to avoid conflicts with other reactive statements
     setTimeout(() => updateHighlighting(), 0);
   }
 
   async function updateHighlighting() {
     if (!responseBodyElement || !response?.body) {
-      console.log('🎨 Highlighting skipped:', { element: !!responseBodyElement, hasBody: !!response?.body });
+
       // Clear content if no response
       if (responseBodyElement) {
         responseBodyElement.textContent = '';

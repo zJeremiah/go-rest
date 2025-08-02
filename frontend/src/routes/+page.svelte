@@ -32,6 +32,11 @@
   let currentEnvironment = null;
   let activeCollectionTab = 'requests';
   
+  // Groups
+  let groups = [];
+  let selectedGroup = 'all'; // Start with 'all' to show everything initially
+  let filteredRequests = [];
+  
   // Environment modal states
   let showCreateEnvironmentModal = false;
   let showCopyEnvironmentModal = false;
@@ -68,7 +73,7 @@
         variables: variables
       };
 
-      console.log('🚀 API request:', requestWithVariables.method, requestWithVariables.url);
+
 
       const res = await fetch('/api/proxy', {
         method: 'POST',
@@ -100,13 +105,23 @@
     
     if (requestName && requestName.trim()) {
       try {
+        // Determine the group for the new request
+        let targetGroup = 'default';
+        if (selectedGroup !== 'all') {
+          targetGroup = selectedGroup;
+        } else if (groups.length > 0) {
+          // If 'all' is selected, use the first available group (usually 'default')
+          targetGroup = groups.find(g => g.name === 'default')?.name || groups[0].name;
+        }
+
         const newRequestData = {
           name: requestName.trim(),
           url: 'https://api.example.com/endpoint',
           method: 'GET',
           headers: { 'Content-Type': 'application/json' },
           body: '',
-          params: []
+          params: [],
+          group: targetGroup
         };
 
         const res = await fetch('/api/requests/save', {
@@ -121,7 +136,7 @@
           const savedRequest = await res.json();
           savedRequests = [...savedRequests, savedRequest];
           selectRequest(savedRequest); // This will automatically save to localStorage
-          console.log('✅ New request created and selected:', savedRequest.name);
+
         } else {
           console.error('❌ Failed to create request');
         }
@@ -160,7 +175,7 @@
         savedRequests = savedRequests.map(r => 
           r.id === requestId ? { ...r, lastResponse: responseData } : r
         );
-        console.log('✅ Request response updated');
+
       }
     } catch (error) {
       console.error('❌ Error updating request response:', error);
@@ -168,20 +183,14 @@
   }
 
   async function saveRequest(requestData) {
-    console.log('🎯 Parent saveRequest function called');
-    console.log('🔍 Received requestData:', requestData);
-    console.log('🔍 selectedRequest:', selectedRequest);
+
     
     if (!selectedRequest) {
-      console.log('❌ No selected request, aborting save');
+
       return;
     }
 
-    console.log('🔄 Parent received save request for:', selectedRequest.name);
-    console.log('🔍 NEW URL from form:', requestData.url);
-    console.log('🔍 OLD URL in state:', selectedRequest.url);
-    console.log('🔍 URLs are different:', requestData.url !== selectedRequest.url);
-    console.log('🔍 Will update URL:', selectedRequest.url, '→', requestData.url);
+
 
     try {
       const updateData = {
@@ -191,11 +200,11 @@
         method: requestData.method,
         headers: requestData.headers || {},
         body: requestData.body || '',
-        params: requestData.params || []
+        params: requestData.params || [],
+        group: selectedRequest.group || 'default'
       };
 
-      console.log('📤 Sending update to backend:', updateData);
-      console.log('🌐 Making API call to /api/requests/update');
+
 
       const res = await fetch('/api/requests/update', {
         method: 'PUT',
@@ -205,10 +214,10 @@
         body: JSON.stringify(updateData)
       });
 
-      console.log('📨 API response status:', res.status);
+
       
       if (res.ok) {
-        console.log('✅ API call successful');
+
 
         // Update local state with proper isolation
         const oldUrl = selectedRequest.url;
@@ -224,9 +233,7 @@
         // Update selectedRequest reference
         selectedRequest = updatedRequest;
 
-        console.log('✅ Request auto-saved:', selectedRequest.name);
-        console.log('🔄 URL updated in local state from:', oldUrl, 'to:', updateData.url);
-        console.log('📊 Updated  savedRequests array length:', savedRequests.length);
+
 
         // Optional: Could dispatch custom event to notify child component save is complete
         // This helps with the save status feedback
@@ -259,7 +266,7 @@
         const duplicatedRequest = await res.json();
         savedRequests = [...savedRequests, duplicatedRequest];
         selectRequest(duplicatedRequest); // This will automatically save to localStorage
-        console.log('✅ Request duplicated and selected:', duplicatedRequest.name);
+        
       } else {
         console.error('❌ Failed to duplicate request');
       }
@@ -271,8 +278,7 @@
   async function deleteRequest(request) {
     if (confirm(`Are you sure you want to delete "${request.name}"?`)) {
       try {
-        console.log('🗑️ Deleting request:', request.id, request.name);
-        console.log('📊 Requests before delete:', savedRequests.length);
+        
 
         const res = await fetch('/api/requests/delete', {
           method: 'DELETE',
@@ -282,15 +288,15 @@
           body: JSON.stringify({ id: request.id })
         });
 
-        console.log('🔄 Delete response status:', res.status);
+  
 
         if (res.ok) {
           const responseData = await res.json();
-          console.log('✅ Delete response:', responseData);
+  
   
           // Filter out the deleted request
           const newRequests = savedRequests.filter(r => r.id !== request.id);
-          console.log('📊 Requests after filter:', newRequests.length);
+    
   
           savedRequests = newRequests;
   
@@ -298,15 +304,15 @@
             selectedRequest = null;
             // Clear localStorage since the selected request was deleted
             localStorage.removeItem('lastSelectedRequestId');
-            console.log('🗑️  Cleared last selected request from localStorage');
+    
     
             // Auto-select another request if available
             if (newRequests.length > 0) {
-              console.log('🔄 Auto-selecting another request after deletion');
+      
               selectRequest(newRequests[0]);
             }
           }
-          console.log('✅ Request deleted from UI:', request.name);
+    
         } else {
           const errorData = await res.text();
           console.error('❌ Failed to delete request:', res.status, errorData);
@@ -318,10 +324,8 @@
   }
 
   async function startRenameRequest(request) {
-    console.log('🏷️ Starting rename for request:', request.id, request.name);
     renamingRequestId = request.id;
     newRequestName = request.name || '';
-    console.log('🏷️ Set renamingRequestId:', renamingRequestId, 'newRequestName:', newRequestName);
   }
 
   function cancelRename() {
@@ -330,10 +334,10 @@
   }
 
   async function saveRename(request) {
-    console.log('💾 Saving rename for request:', request.id, 'new name:', newRequestName);
+
     
     if (!newRequestName || !newRequestName.trim()) {
-      console.log('❌ Empty name detected, canceling rename');
+
       cancelRename();
       return;
     }
@@ -346,7 +350,8 @@
         method: request.method,
         headers: request.headers,
         body: request.body,
-        params: request.params
+        params: request.params,
+        group: request.group || 'default'
       };
 
       const res = await fetch('/api/requests/update', {
@@ -370,7 +375,7 @@
           selectedRequest = updatedRequest;
         }
 
-        console.log('✅ Request renamed:', newRequestName.trim());
+
         cancelRename();
       } else {
         console.error('❌ Failed to rename request');
@@ -392,12 +397,12 @@
 
   async function loadSavedRequests() {
     try {
-      console.log('📂 Loading saved requests from server...');
+
       const res = await fetch('/api/requests');
       if (res.ok) {
         const data = await res.json();
         const newRequests = data.requests || [];
-        console.log(`📂 Loaded ${newRequests.length} saved requests from server`);
+
 
         // Ensure proper isolation by creating new objects
         savedRequests = newRequests.map(req => ({
@@ -416,6 +421,11 @@
 
         // Auto-select the last selected request after loading
         autoSelectLastRequest();
+        
+        // Force filtering after requests are loaded
+        if (groups.length > 0) {
+          filterRequestsByGroup();
+        }
       }
     } catch (error) {
       console.error('❌ Error loading saved requests:', error);
@@ -428,7 +438,7 @@
       if (res.ok) {
         const data = await res.json();
         variables = data.variables || [];
-        console.log(`🔧 Loaded ${variables.length} variables`);
+
       }
     } catch (error) {
       console.error('❌ Error loading variables:', error);
@@ -446,7 +456,7 @@
       });
 
       if (res.ok) {
-        console.log('✅ Variables saved');
+
       } else {
         console.error('❌ Failed to save variables');
       }
@@ -463,7 +473,7 @@
         const data = await res.json();
         environments = data.environments || [];
         currentEnvironment = data.currentEnvironment;
-        console.log(`🌍 Loaded ${environments.length} environments, current: ${currentEnvironment}`);
+
         
         // Load variables from current environment
         await loadVariables();
@@ -485,7 +495,7 @@
 
       if (res.ok) {
         const newEnv = await res.json();
-        console.log('✅ Environment created:', newEnv.name);
+
         await loadEnvironments(); // Refresh environments
         return newEnv;
       } else {
@@ -506,7 +516,7 @@
       });
 
       if (res.ok) {
-        console.log('✅ Environment deleted');
+
         await loadEnvironments(); // Refresh environments
       } else {
         const error = await res.text();
@@ -526,7 +536,7 @@
       });
 
       if (res.ok) {
-        console.log('✅ Environment activated:', envId);
+
         currentEnvironment = envId;
         await loadVariables(); // Reload variables for new environment
       } else {
@@ -551,7 +561,7 @@
       });
 
       if (res.ok) {
-        console.log('✅ Variables copied between environments');
+
         if (targetEnvId === currentEnvironment) {
           await loadVariables(); // Reload if we're copying to current environment
         }
@@ -564,6 +574,126 @@
       console.error('❌ Error copying variables:', error);
       throw error;
     }
+  }
+
+  // Group management functions
+  async function loadGroups() {
+    try {
+      const res = await fetch('/api/groups');
+      if (res.ok) {
+        const data = await res.json();
+        groups = data.groups || [];
+
+        
+        // Ensure selectedGroup exists in groups
+        const selectedGroupExists = groups.some(g => g.name === selectedGroup);
+        if (!selectedGroupExists && groups.length > 0) {
+          selectedGroup = groups[0].name;
+        }
+        
+        // Force filtering after groups are loaded
+        filterRequestsByGroup();
+      }
+    } catch (error) {
+      console.error('❌ Error loading groups:', error);
+    }
+  }
+
+  async function createGroup(name) {
+    try {
+      const res = await fetch('/api/groups', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name })
+      });
+
+      if (res.ok) {
+        const newGroup = await res.json();
+
+        await loadGroups(); // Refresh groups
+        return newGroup;
+      } else {
+        const error = await res.text();
+        console.error('❌ Failed to create group:', error);
+        throw new Error(error);
+      }
+    } catch (error) {
+      console.error('❌ Error creating group:', error);
+      throw error;
+    }
+  }
+
+  async function deleteGroup(groupId) {
+    try {
+      const res = await fetch(`/api/groups/${groupId}`, {
+        method: 'DELETE'
+      });
+
+      if (res.ok) {
+
+        await loadGroups(); // Refresh groups
+        await loadSavedRequests(); // Refresh requests in case any moved
+      } else {
+        const error = await res.text();
+        console.error('❌ Failed to delete group:', error);
+        throw new Error(error);
+      }
+    } catch (error) {
+      console.error('❌ Error deleting group:', error);
+      throw error;
+    }
+  }
+
+  async function handleCreateGroup() {
+    const groupName = prompt('Enter a name for the new group:');
+    if (!groupName || !groupName.trim()) {
+      return;
+    }
+
+    try {
+      await createGroup(groupName.trim());
+    } catch (error) {
+      alert('Failed to create group: ' + error.message);
+    }
+  }
+
+  async function handleDeleteGroup(group) {
+    if (group.name === 'default') {
+      alert('Cannot delete the default group');
+      return;
+    }
+
+    const hasRequests = savedRequests.some(req => req.group === group.name);
+    if (hasRequests) {
+      alert('Cannot delete a group that contains requests. Move or delete all requests in this group first.');
+      return;
+    }
+
+    if (!confirm(`Delete group "${group.name}"?`)) {
+      return;
+    }
+
+    try {
+      await deleteGroup(group.id);
+    } catch (error) {
+      alert('Failed to delete group: ' + error.message);
+    }
+  }
+
+  // Filter requests by selected group
+  function filterRequestsByGroup() {
+    if (selectedGroup === 'all') {
+      filteredRequests = [...savedRequests];
+    } else {
+      filteredRequests = savedRequests.filter(req => req.group === selectedGroup);
+    }
+  }
+
+  // Reactive statement to update filtered requests when savedRequests or selectedGroup changes
+  $: if (savedRequests && savedRequests.length >= 0) {
+    filterRequestsByGroup();
   }
 
   // Environment modal handlers
@@ -643,7 +773,7 @@
   }
 
   async function selectRequest(request) {
-    console.log('🎯 SELECTING:', request.name, 'URL:', request.url);
+
     
     // Don't auto-save when switching requests - this causes data corruption
     // Users should manually save changes if needed
@@ -656,10 +786,10 @@
     // Load the last response if it exists
     if (request.lastResponse) {
       response = request.lastResponse;
-      console.log('✅ Loaded last response for request:', request.name);
+
     } else {
       response = null;
-      console.log('ℹ️  No last response found for request:', request.name);
+
     }
     
     // Dispatch custom event to populate the form
@@ -679,21 +809,21 @@
   function autoSelectLastRequest() {
     const lastSelectedId = localStorage.getItem('lastSelectedRequestId');
     if (lastSelectedId && savedRequests.length > 0) {
-      console.log('🔄 Looking for last selected request ID:', lastSelectedId);
+
       
       const lastRequest = savedRequests.find(r => r.id === lastSelectedId);
       if (lastRequest) {
-        console.log('✅ Auto-selecting last request:', lastRequest.name);
+
         selectRequest(lastRequest);
       } else {
-        console.log('⚠️  Last selected request not found, selecting first available');
+
         // If the last selected request doesn't exist anymore, select the first one
         if (savedRequests.length > 0) {
           selectRequest(savedRequests[0]);
         }
       }
     } else if (savedRequests.length > 0) {
-      console.log('📝 No previous selection, selecting first request');
+
       // If no previous selection, select the first request
       selectRequest(savedRequests[0]);
     }
@@ -789,6 +919,7 @@
     // Load saved requests and environments from server
     loadSavedRequests();
     loadEnvironments();
+    loadGroups();
   });
 </script>
 
@@ -830,7 +961,7 @@
           class:active={activeCollectionTab === 'variables'}
           on:click={() => activeCollectionTab = 'variables'}
         >
-          🔧 Variables
+          🔧 Environment Variables
           {#if variables.length > 0}
             <span class="tab-count">({variables.length})</span>
           {/if}
@@ -843,6 +974,38 @@
           <button class="btn-add" on:click={addNewRequest} title="Add new request">
             ➕ Add Request
           </button>
+          <button class="btn-add" on:click={handleCreateGroup} title="Create new group">
+            📁 New Group
+          </button>
+        </div>
+
+        <!-- Group Filter Section -->
+        <div class="group-filter-section">
+          <div class="group-selector">
+            <label for="group-select">Filter by Group:</label>
+            <select 
+              id="group-select" 
+              bind:value={selectedGroup} 
+              on:change={() => filterRequestsByGroup()}
+              class="group-select"
+            >
+              <option value="all">All Groups</option>
+              {#each groups as group}
+                <option value={group.name}>{group.name}</option>
+              {/each}
+            </select>
+          </div>
+          <div class="group-actions">
+            {#if selectedGroup !== 'all' && selectedGroup !== 'default'}
+              <button 
+                class="btn-group-delete" 
+                on:click={() => handleDeleteGroup(groups.find(g => g.name === selectedGroup))}
+                title="Delete selected group"
+              >
+                🗑️ Delete Group
+              </button>
+            {/if}
+          </div>
         </div>
 
         {#if savedRequests.length === 0}
@@ -851,9 +1014,15 @@
             <p>No saved requests yet.</p>
             <p class="empty-hint">Click "Add Request" to create your first request!</p>
           </div>
+        {:else if filteredRequests.length === 0}
+          <div class="empty-state">
+            <div class="empty-icon">📁</div>
+            <p>No requests in "{selectedGroup}" group.</p>
+            <p class="empty-hint">Add a request to this group or select a different group.</p>
+          </div>
         {:else}
           <div class="requests-list">
-            {#each savedRequests as request}
+            {#each filteredRequests as request}
               <div 
                 class="request-item"
                 class:selected={selectedRequest?.id === request.id}
@@ -1042,6 +1211,7 @@
       {loading} 
       {selectedRequest}
       {variables}
+      {groups}
       canSend={!!selectedRequest}
     />
   </div>
@@ -1062,8 +1232,12 @@
 
 <!-- Environment Management Modals -->
 {#if showCreateEnvironmentModal}
-  <div class="modal-overlay" on:click={() => showCreateEnvironmentModal = false}>
-    <div class="modal" on:click|stopPropagation>
+  <!-- svelte-ignore a11y-click-events-have-key-events -->
+  <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
+  <div class="modal-overlay" on:click={() => showCreateEnvironmentModal = false} on:keydown={(e) => e.key === 'Escape' && (showCreateEnvironmentModal = false)} role="button" tabindex="-1">
+    <!-- svelte-ignore a11y-click-events-have-key-events -->
+    <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
+    <div class="modal" on:click|stopPropagation role="dialog" aria-modal="true">
       <div class="modal-header">
         <h3>🌍 Create New Environment</h3>
         <button class="modal-close" on:click={() => showCreateEnvironmentModal = false}>✕</button>
@@ -1087,8 +1261,12 @@
 {/if}
 
 {#if showCopyEnvironmentModal}
-  <div class="modal-overlay" on:click={() => showCopyEnvironmentModal = false}>
-    <div class="modal" on:click|stopPropagation>
+  <!-- svelte-ignore a11y-click-events-have-key-events -->
+  <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
+  <div class="modal-overlay" on:click={() => showCopyEnvironmentModal = false} on:keydown={(e) => e.key === 'Escape' && (showCopyEnvironmentModal = false)} role="button" tabindex="-1">
+    <!-- svelte-ignore a11y-click-events-have-key-events -->
+    <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
+    <div class="modal" on:click|stopPropagation role="dialog" aria-modal="true">
       <div class="modal-header">
         <h3>📋 Copy Variables Between Environments</h3>
         <button class="modal-close" on:click={() => showCopyEnvironmentModal = false}>✕</button>
@@ -1970,5 +2148,83 @@
     border-radius: 4px;
     margin: 0;
     font-size: 0.875rem;
+  }
+
+  /* Group Filter Section */
+  .group-filter-section {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding: 0.75rem;
+    background: var(--bg-accent);
+    border-radius: 6px;
+    border: 1px solid var(--border-primary);
+  }
+
+  .group-selector {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .group-selector label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    white-space: nowrap;
+  }
+
+  .group-select {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-primary);
+    border-radius: 4px;
+    padding: 0.375rem 0.75rem;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-width: 120px;
+  }
+
+  .group-select:hover {
+    border-color: var(--border-accent);
+  }
+
+  .group-select:focus {
+    outline: none;
+    border-color: var(--border-accent);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+  }
+
+  .group-actions {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .btn-group-delete {
+    background: #fee2e2;
+    color: #dc2626;
+    border: 1px solid #fecaca;
+    padding: 0.375rem 0.75rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+  }
+
+  .btn-group-delete:hover {
+    background: #fecaca;
+    border-color: #dc2626;
+  }
+
+  .tab-content-header {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding: 0 0.5rem;
+    gap: 0.5rem;
   }
 </style>

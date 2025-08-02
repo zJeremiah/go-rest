@@ -6,6 +6,7 @@
   export let selectedRequest = null;
   export let canSend = false;
   export let variables = []; // Add variables prop
+  export let groups = []; // Groups for selection
 
   let url = '';
   let method = 'GET';
@@ -226,6 +227,14 @@
     }
   }
 
+  // Handle group change
+  function handleGroupChange() {
+    if (selectedRequest && hasFormChanged()) {
+      clearTimeout(urlSaveTimeout);
+      saveCurrentRequest();
+    }
+  }
+
   function handleSubmit() {
     if (!canSend) {
       alert('Please select a request from the collection first');
@@ -259,7 +268,7 @@
       params: params.filter(p => p.key && p.key.trim())
     };
     
-    console.log('📤 Sending request:', method, requestData.url);
+
     
     // Save the request when sending (this will save the RAW URL)
     saveCurrentRequest();
@@ -270,21 +279,19 @@
   // Manual save function
   function handleManualSave() {
     if (!selectedRequest || !url.trim()) {
-      console.log('❌ Manual save aborted - missing selectedRequest or URL');
+
       return;
     }
-    console.log('👆 Manual save button clicked');
+
     saveCurrentRequest();
   }
 
   // Save current request data
   function saveCurrentRequest() {
-    console.log('💾 saveCurrentRequest called');
-    console.log('🔍 selectedRequest:', selectedRequest?.name || 'none');
-    console.log('🔍 url:', url);
+
     
     if (!selectedRequest || !url.trim()) {
-      console.log('❌ Save aborted - missing selectedRequest or URL');
+
       return;
     }
     
@@ -308,12 +315,7 @@
       params: params.filter(p => p.key && p.key.trim())
     };
 
-    console.log('💾 Saving request changes...');
-    console.log('🔍 Current URL in form:', url);
-    console.log('🔍 Method:', method);
-    console.log('🔍 Final URL to save (RAW):', requestData.url);
-    console.log('🔍 Selected request ID:', selectedRequest.id);
-    console.log('📤 Dispatching save event with data:', requestData);
+
     
     // Update our saved state tracking
     lastSavedState = {
@@ -358,7 +360,7 @@
   function loadRequestData(event) {
     const data = event.detail;
     
-    console.log('📥 FORM LOADING URL:', data.url);
+
     
     // Set loading flag to prevent auto-save during load
     isLoadingRequest = true;
@@ -369,7 +371,7 @@
     
     // Populate form fields
     const newUrl = data.url || '';
-    console.log('📝 Setting URL from:', url, 'to:', newUrl);
+
     
     url = newUrl;
     method = data.method || 'GET';
@@ -412,10 +414,10 @@
     // Clear loading flag after a short delay to allow reactive statements to settle
     setTimeout(() => {
       isLoadingRequest = false;
-      console.log('✅ Request data loaded, auto-save re-enabled');
+  
     }, 100);
     
-    console.log('📥 Loaded request data complete');
+
   }
 
   onMount(() => {
@@ -467,6 +469,17 @@
         {/each}
       </select>
     </div>
+
+    {#if selectedRequest}
+      <div class="form-group">
+        <label for="group">Group</label>
+        <select id="group" bind:value={selectedRequest.group} on:change={handleGroupChange} class="select">
+          {#each groups as group}
+            <option value={group.name}>{group.name}</option>
+          {/each}
+        </select>
+      </div>
+    {/if}
 
     <!-- Send Request Buttons - Moved to top for better UX -->
     <div class="button-row">
@@ -1135,7 +1148,6 @@
   .preview-text-top,
   .url-preview-top,
   .url-preview-top *,
-  .preview-text-top *,
   .preview-content,
   .preview-header-row,
   .preview-header-row *,

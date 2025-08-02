@@ -41,6 +41,7 @@ type SavedRequest struct {
 	Headers      map[string]string `json:"headers"`
 	Body         string            `json:"body"`
 	Params       []QueryParam      `json:"params"`
+	Group        string            `json:"group"`
 	LastResponse *ProxyResponse    `json:"lastResponse,omitempty"`
 	CreatedAt    string            `json:"createdAt"`
 	UpdatedAt    string            `json:"updatedAt"`
@@ -65,11 +66,19 @@ type Environment struct {
 	UpdatedAt string     `json:"updatedAt"`
 }
 
+type Group struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	CreatedAt string `json:"createdAt"`
+	UpdatedAt string `json:"updatedAt"`
+}
+
 type SavedRequestsData struct {
 	Requests           []SavedRequest `json:"requests"`
 	Variables          []Variable     `json:"variables"` // Legacy - kept for backward compatibility
 	Environments       []Environment  `json:"environments"`
 	CurrentEnvironment string         `json:"currentEnvironment"`
+	Groups             []Group        `json:"groups"`
 }
 
 func main() {
@@ -98,6 +107,11 @@ func main() {
 		r.Post("/environments", handleCreateEnvironment)
 		r.Put("/environments/{id}", handleUpdateEnvironment)
 		r.Delete("/environments/{id}", handleDeleteEnvironment)
+
+		// Group management endpoints
+		r.Get("/groups", handleGroups)
+		r.Post("/groups", handleCreateGroup)
+		r.Delete("/groups/{id}", handleDeleteGroup)
 		r.Post("/environments/{id}/copy", handleCopyEnvironment)
 		r.Post("/environments/{id}/activate", handleActivateEnvironment)
 	})
@@ -418,6 +432,20 @@ func initializeDefaultEnvironment(data *SavedRequestsData) *SavedRequestsData {
 	return data
 }
 
+// migrateRequestsToDefaultGroup migrates requests without groups to default group
+func migrateRequestsToDefaultGroup(data *SavedRequestsData) {
+	migratedCount := 0
+	for i := range data.Requests {
+		if data.Requests[i].Group == "" {
+			data.Requests[i].Group = "default"
+			migratedCount++
+		}
+	}
+	if migratedCount > 0 {
+		log.Printf("📦 Migrated %d requests to default group", migratedCount)
+	}
+}
+
 // migrateVariablesToEnvironments migrates legacy variables to default environment
 func migrateVariablesToEnvironments(data *SavedRequestsData) *SavedRequestsData {
 	now := time.Now().Format(time.RFC3339)
@@ -514,6 +542,17 @@ func loadSavedRequests() (*SavedRequestsData, error) {
 	if data.CurrentEnvironment == "" && len(data.Environments) > 0 {
 		data.CurrentEnvironment = data.Environments[0].ID
 	}
+
+	// Ensure groups array is not nil
+	if data.Groups == nil {
+		data.Groups = []Group{}
+	}
+
+	// Ensure default group exists
+	ensureDefaultGroup(data)
+
+	// Migrate existing requests without groups to default group
+	migrateRequestsToDefaultGroup(data)
 
 	return data, nil
 }
@@ -622,6 +661,7 @@ func handleSaveRequest(w http.ResponseWriter, r *http.Request) {
 		Headers      map[string]string `json:"headers"`
 		Body         string            `json:"body"`
 		Params       []QueryParam      `json:"params"`
+		Group        string            `json:"group"`
 		LastResponse *ProxyResponse    `json:"lastResponse,omitempty"`
 	}
 
@@ -652,6 +692,11 @@ func handleSaveRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Ensure default group if none provided
+	if req.Group == "" {
+		req.Group = "default"
+	}
+
 	// Create new saved request
 	now := time.Now().Format(time.RFC3339)
 	savedReq := SavedRequest{
@@ -662,6 +707,7 @@ func handleSaveRequest(w http.ResponseWriter, r *http.Request) {
 		Headers:      req.Headers,
 		Body:         req.Body,
 		Params:       req.Params,
+		Group:        req.Group,
 		LastResponse: req.LastResponse,
 		CreatedAt:    now,
 		UpdatedAt:    now,
@@ -700,6 +746,7 @@ func handleUpdateRequest(w http.ResponseWriter, r *http.Request) {
 		Headers      map[string]string `json:"headers"`
 		Body         string            `json:"body"`
 		Params       []QueryParam      `json:"params"`
+		Group        string            `json:"group"`
 		LastResponse *ProxyResponse    `json:"lastResponse,omitempty"`
 	}
 
@@ -725,6 +772,9 @@ func handleUpdateRequest(w http.ResponseWriter, r *http.Request) {
 	if req.Method == "" {
 		req.Method = "GET"
 	}
+	if req.Group == "" {
+		req.Group = "default"
+	}
 
 	// Load existing requests
 	data, err := loadSavedRequests()
@@ -744,6 +794,7 @@ func handleUpdateRequest(w http.ResponseWriter, r *http.Request) {
 			data.Requests[i].Headers = req.Headers
 			data.Requests[i].Body = req.Body
 			data.Requests[i].Params = req.Params
+			data.Requests[i].Group = req.Group
 			if req.LastResponse != nil {
 				data.Requests[i].LastResponse = req.LastResponse
 			}
@@ -886,13 +937,22 @@ func handleDuplicateRequest(w http.ResponseWriter, r *http.Request) {
 		Name:         originalRequest.Name + " (Copy)",
 		URL:          originalRequest.URL,
 		Method:       originalRequest.Method,
-		Headers:      originalRequest.Headers,
+		Headers:      make(map[string]string),
 		Body:         originalRequest.Body,
-		Params:       originalRequest.Params,
-		LastResponse: nil, // Don't copy the response
+		Params:       make([]QueryParam, len(originalRequest.Params)),
+		Group:        originalRequest.Group,
+		LastResponse: nil, // Don't copy response
 		CreatedAt:    now,
 		UpdatedAt:    now,
 	}
+
+	// Deep copy headers
+	for k, v := range originalRequest.Headers {
+		duplicatedReq.Headers[k] = v
+	}
+
+	// Deep copy params
+	copy(duplicatedReq.Params, originalRequest.Params)
 
 	// Add to requests list
 	data.Requests = append(data.Requests, duplicatedReq)
@@ -1360,6 +1420,194 @@ func handleActivateEnvironment(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(map[string]string{"status": "activated"}); err != nil {
 		log.Printf("❌ Failed to encode activation response: %v", err)
 	}
+}
+
+// handleGroups handles GET requests to get all groups
+func handleGroups(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	data, err := loadSavedRequests()
+	if err != nil {
+		log.Printf("❌ Failed to load saved requests: %v", err)
+		respondWithError(w, "Failed to load saved requests", http.StatusInternalServerError)
+		return
+	}
+
+	// Ensure default group exists
+	ensureDefaultGroup(data)
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string][]Group{"groups": data.Groups}); err != nil {
+		log.Printf("❌ Failed to encode groups: %v", err)
+	}
+}
+
+// handleCreateGroup handles POST requests to create a new group
+func handleCreateGroup(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Name string `json:"name"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("❌ Invalid request body for create group: %v", err)
+		respondWithError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Name == "" {
+		respondWithError(w, "Group name is required", http.StatusBadRequest)
+		return
+	}
+
+	// Load existing data
+	data, err := loadSavedRequests()
+	if err != nil {
+		log.Printf("❌ Failed to load saved requests: %v", err)
+		respondWithError(w, "Failed to load saved requests", http.StatusInternalServerError)
+		return
+	}
+
+	// Check if group already exists
+	for _, group := range data.Groups {
+		if group.Name == req.Name {
+			respondWithError(w, "Group already exists", http.StatusConflict)
+			return
+		}
+	}
+
+	// Create new group
+	now := time.Now().Format(time.RFC3339)
+	newGroup := Group{
+		ID:        generateID(),
+		Name:      req.Name,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	data.Groups = append(data.Groups, newGroup)
+
+	// Save to file
+	if err := saveSavedRequests(data); err != nil {
+		log.Printf("❌ Failed to save group: %v", err)
+		respondWithError(w, "Failed to save group", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("✅ Created group: %s", newGroup.Name)
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(newGroup); err != nil {
+		log.Printf("❌ Failed to encode group response: %v", err)
+	}
+}
+
+// handleDeleteGroup handles DELETE requests to delete a group
+func handleDeleteGroup(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	groupID := chi.URLParam(r, "id")
+	if groupID == "" {
+		respondWithError(w, "Group ID is required", http.StatusBadRequest)
+		return
+	}
+
+	// Load existing data
+	data, err := loadSavedRequests()
+	if err != nil {
+		log.Printf("❌ Failed to load saved requests: %v", err)
+		respondWithError(w, "Failed to load saved requests", http.StatusInternalServerError)
+		return
+	}
+
+	// Find the group and check if it has requests
+	var groupName string
+	found := false
+	for _, group := range data.Groups {
+		if group.ID == groupID {
+			groupName = group.Name
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		respondWithError(w, "Group not found", http.StatusNotFound)
+		return
+	}
+
+	// Don't allow deleting default group
+	if groupName == "default" {
+		respondWithError(w, "Cannot delete default group", http.StatusBadRequest)
+		return
+	}
+
+	// Check if group has any requests
+	hasRequests := false
+	for _, req := range data.Requests {
+		if req.Group == groupName {
+			hasRequests = true
+			break
+		}
+	}
+
+	if hasRequests {
+		respondWithError(w, "Cannot delete group with requests", http.StatusBadRequest)
+		return
+	}
+
+	// Remove the group
+	for i, group := range data.Groups {
+		if group.ID == groupID {
+			data.Groups = append(data.Groups[:i], data.Groups[i+1:]...)
+			break
+		}
+	}
+
+	// Save to file
+	if err := saveSavedRequests(data); err != nil {
+		log.Printf("❌ Failed to save after group deletion: %v", err)
+		respondWithError(w, "Failed to delete group", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("✅ Deleted group: %s", groupName)
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]string{"status": "deleted"}); err != nil {
+		log.Printf("❌ Failed to encode delete response: %v", err)
+	}
+}
+
+// ensureDefaultGroup ensures the default group exists
+func ensureDefaultGroup(data *SavedRequestsData) {
+	// Check if default group exists
+	for _, group := range data.Groups {
+		if group.Name == "default" {
+			return
+		}
+	}
+
+	// Create default group
+	now := time.Now().Format(time.RFC3339)
+	defaultGroup := Group{
+		ID:        generateID(),
+		Name:      "default",
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	data.Groups = append(data.Groups, defaultGroup)
 }
 
 // respondWithError sends an error response
