@@ -12,6 +12,7 @@
   let method = 'GET';
   let headers = [{ key: 'Content-Type', value: 'application/json', enabled: true }];
   let body = '';
+  let description = '';
   let activeTab = 'headers';
   let params = [{ key: '', value: '', enabled: true }];
   let saveStatus = ''; // Track save status for user feedback
@@ -193,12 +194,13 @@
       method !== lastSavedState.method ||
       JSON.stringify(currentHeaders) !== JSON.stringify(lastHeaders) ||
       body !== lastSavedState.body ||
-      JSON.stringify(currentParams) !== JSON.stringify(lastParams)
+      JSON.stringify(currentParams) !== JSON.stringify(lastParams) ||
+      description !== lastSavedState.description
     );
   }
 
   // Auto-save when any form field changes (explicitly depend on all form fields)
-  $: if (selectedRequest && url && url.trim() && !isLoadingRequest && (url || method || headers || body || params)) {
+  $: if (selectedRequest && url && url.trim() && !isLoadingRequest && (url || method || headers || body || params || description)) {
     // Check for changes in url, method, headers, body, params
     const formChanged = hasFormChanged();
     if (formChanged) {
@@ -318,7 +320,8 @@
       headers: parsedHeaders,
       body: body.trim(),
       params: params.filter(p => p.key && p.key.trim()),
-      group: selectedRequest?.group || 'default'
+      group: selectedRequest?.group || 'default',
+      description: description.trim()
     };
 
 
@@ -329,7 +332,8 @@
       method: method,
       headers: [...headers.filter(h => h.key && h.key.trim())],
       body: body,
-      params: [...params.filter(p => p.key && p.key.trim())]
+      params: [...params.filter(p => p.key && p.key.trim())],
+      description: description
     };
     
     dispatch('save', requestData);
@@ -382,6 +386,7 @@
     url = newUrl;
     method = data.method || 'GET';
     body = data.body || '';
+    description = data.description || '';
     
     // Handle headers - convert from object to array format
     if (data.headers && Object.keys(data.headers).length > 0) {
@@ -414,7 +419,8 @@
       method: method,
       headers: [...headers.filter(h => h.key && h.key.trim())],
       body: body,
-      params: [...params.filter(p => p.key && p.key.trim())]
+      params: [...params.filter(p => p.key && p.key.trim())],
+      description: description
     };
     
     // Clear loading flag after a short delay to allow reactive statements to settle
@@ -691,6 +697,18 @@
       </div>
     {/if}
 
+    <div class="form-group">
+      <label for="description">Description</label>
+      <textarea 
+        id="description"
+        bind:value={description} 
+        on:blur={handleFieldBlur}
+        placeholder="Add a description for this request..."
+        class="textarea description-textarea"
+        rows="3"
+      ></textarea>
+    </div>
+
   </form>
 </div>
 
@@ -796,6 +814,12 @@
   textarea {
     font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
     font-size: 0.8rem;
+  }
+
+  .description-textarea {
+    font-family: inherit !important;
+    font-size: 0.75rem !important;
+    line-height: 1.4;
   }
 
   /* Tabs Styles */

@@ -121,7 +121,8 @@
           headers: { 'Content-Type': 'application/json' },
           body: '',
           params: [],
-          group: targetGroup
+          group: targetGroup,
+          description: ''
         };
 
         const res = await fetch('/api/requests/save', {
@@ -160,6 +161,7 @@
         body: requestToUpdate.body,
         params: requestToUpdate.params,
         group: requestToUpdate.group || 'default',
+        description: requestToUpdate.description || '',
         lastResponse: responseData
       };
 
@@ -202,7 +204,8 @@
         headers: requestData.headers || {},
         body: requestData.body || '',
         params: requestData.params || [],
-        group: requestData.group || selectedRequest.group || 'default'
+        group: requestData.group || selectedRequest.group || 'default',
+        description: requestData.description || ''
       };
 
 
@@ -801,7 +804,8 @@
         method: request.method,
         headers: request.headers,
         body: request.body,
-        params: request.params || []
+        params: request.params || [],
+        description: request.description || ''
       }
     });
     window.dispatchEvent(event);
@@ -1074,6 +1078,14 @@
                         {request.lastResponse.statusCode}
                       </span>
                       <span class="response-time">{new Date(request.updatedAt).toLocaleDateString()}</span>
+                    </div>
+                  {/if}
+                  {#if request.description && request.description.trim()}
+                    <div 
+                      class="request-description"
+                      title={request.description}
+                    >
+                      {request.description.split('\n')[0]}
                     </div>
                   {/if}
                 </div>
@@ -1832,6 +1844,17 @@
   .response-time {
     font-size: 0.625rem;
     color: #9ca3af;
+  }
+
+  .request-description {
+    font-size: 0.625rem;
+    color: var(--text-secondary);
+    font-style: italic;
+    margin-top: 0.25rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: help;
   }
 
   /* Variables Section Styling */

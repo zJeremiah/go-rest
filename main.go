@@ -42,6 +42,7 @@ type SavedRequest struct {
 	Body         string            `json:"body"`
 	Params       []QueryParam      `json:"params"`
 	Group        string            `json:"group"`
+	Description  string            `json:"description"`
 	LastResponse *ProxyResponse    `json:"lastResponse,omitempty"`
 	CreatedAt    string            `json:"createdAt"`
 	UpdatedAt    string            `json:"updatedAt"`
@@ -662,6 +663,7 @@ func handleSaveRequest(w http.ResponseWriter, r *http.Request) {
 		Body         string            `json:"body"`
 		Params       []QueryParam      `json:"params"`
 		Group        string            `json:"group"`
+		Description  string            `json:"description"`
 		LastResponse *ProxyResponse    `json:"lastResponse,omitempty"`
 	}
 
@@ -708,6 +710,7 @@ func handleSaveRequest(w http.ResponseWriter, r *http.Request) {
 		Body:         req.Body,
 		Params:       req.Params,
 		Group:        req.Group,
+		Description:  req.Description,
 		LastResponse: req.LastResponse,
 		CreatedAt:    now,
 		UpdatedAt:    now,
@@ -747,6 +750,7 @@ func handleUpdateRequest(w http.ResponseWriter, r *http.Request) {
 		Body         string            `json:"body"`
 		Params       []QueryParam      `json:"params"`
 		Group        string            `json:"group"`
+		Description  string            `json:"description"`
 		LastResponse *ProxyResponse    `json:"lastResponse,omitempty"`
 	}
 
@@ -795,6 +799,7 @@ func handleUpdateRequest(w http.ResponseWriter, r *http.Request) {
 			data.Requests[i].Body = req.Body
 			data.Requests[i].Params = req.Params
 			data.Requests[i].Group = req.Group
+			data.Requests[i].Description = req.Description
 			if req.LastResponse != nil {
 				data.Requests[i].LastResponse = req.LastResponse
 			}
@@ -941,6 +946,7 @@ func handleDuplicateRequest(w http.ResponseWriter, r *http.Request) {
 		Body:         originalRequest.Body,
 		Params:       make([]QueryParam, len(originalRequest.Params)),
 		Group:        originalRequest.Group,
+		Description:  originalRequest.Description,
 		LastResponse: nil, // Don't copy response
 		CreatedAt:    now,
 		UpdatedAt:    now,
