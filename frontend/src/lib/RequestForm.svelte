@@ -12,6 +12,9 @@
   let method = 'GET';
   let headers = [{ key: 'Content-Type', value: 'application/json', enabled: true }];
   let body = '';
+  let bodyType = 'text'; // 'text', 'json', 'form'
+  let jsonFields = [{ key: '', value: '', enabled: true }];
+  let formFields = [{ key: '', value: '', enabled: true }];
   let description = '';
   let activeTab = 'headers';
   let params = [{ key: '', value: '', enabled: true }];
@@ -19,6 +22,11 @@
 
 
   const methods = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'];
+  const bodyTypes = [
+    { id: 'text', label: 'Text' },
+    { id: 'json', label: 'JSON' },
+    { id: 'form', label: 'Form URL Encoded' }
+  ];
   const tabs = [
     { id: 'headers', label: 'Headers', icon: '📋' },
     { id: 'params', label: 'Params', icon: '🔍' }
@@ -101,6 +109,170 @@
   function removeParam(index) {
     params = params.filter((_, i) => i !== index);
     updatePreview();
+  }
+
+  // JSON field management
+  function addJsonField() {
+    jsonFields = [...jsonFields, { key: '', value: '', enabled: true }];
+  }
+
+  function removeJsonField(index) {
+    jsonFields = jsonFields.filter((_, i) => i !== index);
+  }
+
+  // Form field management
+  function addFormField() {
+    formFields = [...formFields, { key: '', value: '', enabled: true }];
+  }
+
+  function removeFormField(index) {
+    formFields = formFields.filter((_, i) => i !== index);
+  }
+
+  // Build body content based on type
+  function buildBodyContent() {
+    switch (bodyType) {
+      case 'json':
+        const jsonObj = {};
+        jsonFields.filter(f => f.enabled && f.key && f.key.trim()).forEach(field => {
+          const processedKey = processTemplate(field.key.trim(), variables);
+          let processedValue = processTemplate(field.value || '', variables);
+          
+          // Try to parse the processed value as JSON if it looks like JSON
+          try {
+            if (processedValue && (processedValue.startsWith('{') || processedValue.startsWith('[') || processedValue === 'true' || processedValue === 'false' || processedValue === 'null' || !isNaN(processedValue))) {
+              processedValue = JSON.parse(processedValue);
+            }
+          } catch (e) {
+            // Keep as string if not valid JSON
+          }
+          
+          jsonObj[processedKey] = processedValue;
+        });
+        return JSON.stringify(jsonObj, null, 2);
+      
+      case 'form':
+        const formData = new URLSearchParams();
+        formFields.filter(f => f.enabled && f.key && f.key.trim()).forEach(field => {
+          const processedKey = processTemplate(field.key.trim(), variables);
+          const processedValue = processTemplate(field.value || '', variables);
+          formData.append(processedKey, processedValue);
+        });
+        return formData.toString();
+      
+      case 'text':
+      default:
+        return processTemplate(body, variables);
+    }
+  }
+
+  // Build raw body content (without template processing) for saving
+  function buildRawBodyContent() {
+    switch (bodyType) {
+      case 'json':
+        const jsonObj = {};
+        jsonFields.filter(f => f.enabled && f.key && f.key.trim()).forEach(field => {
+          const key = field.key.trim();
+          let value = field.value || '';
+          
+          // Try to parse the value as JSON if it looks like JSON (but don't process templates)
+          try {
+            if (value && (value.startsWith('{') || value.startsWith('[') || value === 'true' || value === 'false' || value === 'null' || !isNaN(value))) {
+              value = JSON.parse(value);
+            }
+          } catch (e) {
+            // Keep as string if not valid JSON
+          }
+          
+          jsonObj[key] = value;
+        });
+        return JSON.stringify(jsonObj, null, 2);
+      
+      case 'form':
+        const formData = new URLSearchParams();
+        formFields.filter(f => f.enabled && f.key && f.key.trim()).forEach(field => {
+          formData.append(field.key.trim(), field.value || '');
+        });
+        return formData.toString();
+      
+      case 'text':
+      default:
+        return body;
+    }
+  }
+
+  // Parse body content when switching types
+  function parseBodyContent(content, targetType) {
+    try {
+      switch (targetType) {
+        case 'json':
+          if (content && content.trim()) {
+            const parsed = JSON.parse(content);
+            if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+              return Object.entries(parsed).map(([key, value]) => ({
+                key,
+                value: typeof value === 'string' ? value : JSON.stringify(value),
+                enabled: true
+              }));
+            }
+          }
+          return [{ key: '', value: '', enabled: true }];
+        
+        case 'form':
+          if (content && content.trim()) {
+            const params = new URLSearchParams(content);
+            const fields = [];
+            for (const [key, value] of params.entries()) {
+              fields.push({ key, value, enabled: true });
+            }
+            return fields.length > 0 ? fields : [{ key: '', value: '', enabled: true }];
+          }
+          return [{ key: '', value: '', enabled: true }];
+        
+        case 'text':
+        default:
+          return content;
+      }
+    } catch (e) {
+      // If parsing fails, return default
+      if (targetType === 'json' || targetType === 'form') {
+        return [{ key: '', value: '', enabled: true }];
+      }
+      return content;
+    }
+  }
+
+  // Handle body type change
+  function handleBodyTypeChange() {
+    const currentBodyContent = buildBodyContent();
+    
+    // Parse current content into the new format
+    if (bodyType === 'json') {
+      jsonFields = parseBodyContent(currentBodyContent, 'json');
+    } else if (bodyType === 'form') {
+      formFields = parseBodyContent(currentBodyContent, 'form');
+    } else {
+      body = currentBodyContent;
+    }
+    
+    // Update Content-Type header based on body type
+    const contentTypeIndex = headers.findIndex(h => h.key.toLowerCase() === 'content-type');
+    if (contentTypeIndex !== -1) {
+      // Update existing Content-Type header
+      if (bodyType === 'json') {
+        headers[contentTypeIndex].value = 'application/json';
+      } else if (bodyType === 'form') {
+        headers[contentTypeIndex].value = 'application/x-www-form-urlencoded';
+      }
+      headers = [...headers]; // Trigger reactivity
+    } else {
+      // Add Content-Type header if it doesn't exist
+      if (bodyType === 'json') {
+        headers = [...headers, { key: 'Content-Type', value: 'application/json', enabled: true }];
+      } else if (bodyType === 'form') {
+        headers = [...headers, { key: 'Content-Type', value: 'application/x-www-form-urlencoded', enabled: true }];
+      }
+    }
   }
 
   function buildUrlWithParams() {
@@ -189,18 +361,30 @@
     const currentHeaders = headers.filter(h => h.key && h.key.trim());
     const lastHeaders = lastSavedState.headers || [];
     
+    const currentJsonFields = jsonFields.filter(f => f.key && f.key.trim());
+    const lastJsonFields = lastSavedState.jsonFields || [];
+    
+    const currentFormFields = formFields.filter(f => f.key && f.key.trim());
+    const lastFormFields = lastSavedState.formFields || [];
+    
+    const currentBodyContent = buildRawBodyContent();
+    const lastBodyContent = lastSavedState.bodyContent || '';
+    
     return (
       url !== lastSavedState.url ||
       method !== lastSavedState.method ||
       JSON.stringify(currentHeaders) !== JSON.stringify(lastHeaders) ||
-      body !== lastSavedState.body ||
+      currentBodyContent !== lastBodyContent ||
+      bodyType !== lastSavedState.bodyType ||
+      JSON.stringify(currentJsonFields) !== JSON.stringify(lastJsonFields) ||
+      JSON.stringify(currentFormFields) !== JSON.stringify(lastFormFields) ||
       JSON.stringify(currentParams) !== JSON.stringify(lastParams) ||
       description !== lastSavedState.description
     );
   }
 
   // Auto-save when any form field changes (explicitly depend on all form fields)
-  $: if (selectedRequest && url && url.trim() && !isLoadingRequest && (url || method || headers || body || params || description)) {
+  $: if (selectedRequest && url && url.trim() && !isLoadingRequest && (url || method || headers || body || bodyType || jsonFields || formFields || params || description)) {
     // Check for changes in url, method, headers, body, params
     const formChanged = hasFormChanged();
     if (formChanged) {
@@ -267,11 +451,12 @@
 
     // For API requests, we DO want to use the processed URL with variables substituted
     const processedUrl = buildUrlWithParams();
+    const finalBodyContent = buildBodyContent();
     const requestData = {
       url: processedUrl || url.trim(),
       method,
       headers: parsedHeaders,
-      body: body.trim(),
+      body: finalBodyContent,
       params: params.filter(p => p.key && p.key.trim())
     };
     
@@ -314,11 +499,12 @@
 
     // Save the RAW URL that user typed, not the processed template URL
     // Template processing should only happen during API requests, not when saving
+    const rawBodyContent = buildRawBodyContent();
     const requestData = {
       url: url.trim(), // Save raw URL with template variables intact
       method,
       headers: parsedHeaders,
-      body: body.trim(),
+      body: rawBodyContent, // Save raw body with template variables intact
       params: params.filter(p => p.key && p.key.trim()),
       group: selectedRequest?.group || 'default',
       description: description.trim()
@@ -331,7 +517,10 @@
       url: url,
       method: method,
       headers: [...headers.filter(h => h.key && h.key.trim())],
-      body: body,
+      bodyContent: rawBodyContent,
+      bodyType: bodyType,
+      jsonFields: [...jsonFields.filter(f => f.key && f.key.trim())],
+      formFields: [...formFields.filter(f => f.key && f.key.trim())],
       params: [...params.filter(p => p.key && p.key.trim())],
       description: description
     };
@@ -388,6 +577,47 @@
     body = data.body || '';
     description = data.description || '';
     
+    // Detect body type and parse fields
+    const bodyContent = body.trim();
+    if (bodyContent) {
+      // Try to detect if it's JSON
+      try {
+        const parsed = JSON.parse(bodyContent);
+        if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+          bodyType = 'json';
+          jsonFields = Object.entries(parsed).map(([key, value]) => ({
+            key,
+            value: typeof value === 'string' ? value : JSON.stringify(value),
+            enabled: true
+          }));
+        } else {
+          bodyType = 'text';
+        }
+      } catch (e) {
+        // Try to detect if it's form URL encoded
+        try {
+          const params = new URLSearchParams(bodyContent);
+          const hasParams = Array.from(params.entries()).length > 0;
+          if (hasParams) {
+            bodyType = 'form';
+            formFields = Array.from(params.entries()).map(([key, value]) => ({
+              key,
+              value,
+              enabled: true
+            }));
+          } else {
+            bodyType = 'text';
+          }
+        } catch (e) {
+          bodyType = 'text';
+        }
+      }
+    } else {
+      bodyType = 'text';
+      jsonFields = [{ key: '', value: '', enabled: true }];
+      formFields = [{ key: '', value: '', enabled: true }];
+    }
+    
     // Handle headers - convert from object to array format
     if (data.headers && Object.keys(data.headers).length > 0) {
       headers = Object.entries(data.headers).map(([key, value]) => ({
@@ -396,7 +626,12 @@
         enabled: true
       }));
     } else {
-      headers = [{ key: 'Content-Type', value: 'application/json', enabled: true }];
+      // Set default Content-Type based on detected body type
+      let defaultContentType = 'application/json';
+      if (bodyType === 'form') {
+        defaultContentType = 'application/x-www-form-urlencoded';
+      }
+      headers = [{ key: 'Content-Type', value: defaultContentType, enabled: true }];
     }
     
     // Handle params
@@ -414,11 +649,15 @@
     updatePreview();
     
     // Initialize saved state tracking
+    const initialBodyContent = buildRawBodyContent();
     lastSavedState = {
       url: newUrl,
       method: method,
       headers: [...headers.filter(h => h.key && h.key.trim())],
-      body: body,
+      bodyContent: initialBodyContent,
+      bodyType: bodyType,
+      jsonFields: [...jsonFields.filter(f => f.key && f.key.trim())],
+      formFields: [...formFields.filter(f => f.key && f.key.trim())],
       params: [...params.filter(p => p.key && p.key.trim())],
       description: description
     };
@@ -686,14 +925,109 @@
     {#if method !== 'GET' && method !== 'HEAD'}
       <div class="form-group">
         <label for="body">Request Body</label>
-        <textarea 
-          id="body"
-          bind:value={body} 
-          on:blur={handleFieldBlur}
-          placeholder={method === 'POST' ? '{"key": "value"}' : ''}
-          class="textarea"
-          rows="6"
-        ></textarea>
+        
+        <!-- Body Type Selector -->
+        <div class="body-type-selector">
+          {#each bodyTypes as type}
+            <label class="body-type-option">
+              <input 
+                type="radio" 
+                bind:group={bodyType} 
+                value={type.id}
+                on:change={handleBodyTypeChange}
+              />
+              <span>{type.label}</span>
+            </label>
+          {/each}
+        </div>
+
+        <!-- Text Body -->
+        {#if bodyType === 'text'}
+          <textarea 
+            id="body"
+            bind:value={body} 
+            on:blur={handleFieldBlur}
+            placeholder="Raw text, JSON, XML, etc..."
+            class="textarea"
+            rows="6"
+          ></textarea>
+        {/if}
+
+        <!-- JSON Body -->
+        {#if bodyType === 'json'}
+          <div class="json-fields">
+            {#each jsonFields as field, index}
+              <div class="field-row">
+                <input 
+                  type="checkbox" 
+                  bind:checked={field.enabled}
+                  class="field-checkbox"
+                />
+                <input 
+                  type="text" 
+                  bind:value={field.key}
+                  placeholder="Key"
+                  class="field-input field-key"
+                />
+                <input 
+                  type="text" 
+                  bind:value={field.value}
+                  placeholder="Value"
+                  class="field-input field-value"
+                />
+                <button 
+                  type="button" 
+                  class="btn-remove-field" 
+                  on:click={() => removeJsonField(index)}
+                  disabled={jsonFields.length <= 1}
+                >
+                  ✕
+                </button>
+              </div>
+            {/each}
+            <button type="button" class="btn-add-field" on:click={addJsonField}>
+              + Add JSON Field
+            </button>
+          </div>
+        {/if}
+
+        <!-- Form URL Encoded Body -->
+        {#if bodyType === 'form'}
+          <div class="form-fields">
+            {#each formFields as field, index}
+              <div class="field-row">
+                <input 
+                  type="checkbox" 
+                  bind:checked={field.enabled}
+                  class="field-checkbox"
+                />
+                <input 
+                  type="text" 
+                  bind:value={field.key}
+                  placeholder="Key"
+                  class="field-input field-key"
+                />
+                <input 
+                  type="text" 
+                  bind:value={field.value}
+                  placeholder="Value"
+                  class="field-input field-value"
+                />
+                <button 
+                  type="button" 
+                  class="btn-remove-field" 
+                  on:click={() => removeFormField(index)}
+                  disabled={formFields.length <= 1}
+                >
+                  ✕
+                </button>
+              </div>
+            {/each}
+            <button type="button" class="btn-add-field" on:click={addFormField}>
+              + Add Form Field
+            </button>
+          </div>
+        {/if}
       </div>
     {/if}
 
@@ -874,7 +1208,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 1rem;
+    margin-bottom: 0.75rem;
   }
 
   .headers-header span {
@@ -886,7 +1220,7 @@
   .headers-list {
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    gap: 0.5rem;
     max-height: 300px;
     overflow-y: auto;
   }
@@ -894,9 +1228,9 @@
   .header-row {
     display: grid;
     grid-template-columns: auto 1fr 1fr auto;
-    gap: 0.75rem;
+    gap: 0.5rem;
     align-items: center;
-    padding: 0.75rem;
+    padding: 0.5rem;
     background: #f9fafb;
     border-radius: 6px;
     border: 1px solid #e5e7eb;
@@ -978,7 +1312,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 1rem;
+    margin-bottom: 0.75rem;
   }
 
   .params-header span {
@@ -990,7 +1324,7 @@
   .params-list {
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    gap: 0.5rem;
     max-height: 300px;
     overflow-y: auto;
   }
@@ -998,9 +1332,9 @@
   .param-row {
     display: grid;
     grid-template-columns: auto 1fr 1fr auto;
-    gap: 0.75rem;
+    gap: 0.5rem;
     align-items: center;
-    padding: 0.75rem;
+    padding: 0.5rem;
     background: #f9fafb;
     border-radius: 6px;
     border: 1px solid #e5e7eb;
@@ -1187,5 +1521,239 @@
     -webkit-user-select: text !important;
     -moz-user-select: text !important;
     cursor: text !important;
+  }
+
+  /* Body Type Selector Styles */
+  .body-type-selector {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    padding: 0.5rem;
+    background: #f9fafb;
+    border-radius: 6px;
+    border: 1px solid #e5e7eb;
+  }
+
+  .body-type-option {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #6b7280;
+  }
+
+  .body-type-option input[type="radio"] {
+    margin: 0;
+  }
+
+  .body-type-option:has(input:checked) span {
+    color: #2563eb;
+    font-weight: 600;
+  }
+
+  /* JSON and Form Fields Styles */
+  .json-fields,
+  .form-fields {
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    background: white;
+  }
+
+  .field-row {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.5rem;
+    border-bottom: 1px solid #f3f4f6;
+  }
+
+  .field-row:last-of-type {
+    border-bottom: none;
+  }
+
+  .field-checkbox {
+    margin: 0;
+    cursor: pointer;
+  }
+
+  .field-input {
+    flex: 1;
+    padding: 0.5rem;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  }
+
+  .field-key {
+    flex: 0 0 200px;
+  }
+
+  .field-value {
+    flex: 2;
+  }
+
+  .field-input:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 1px #2563eb;
+  }
+
+  .btn-remove-field {
+    background: #fee2e2;
+    color: #dc2626;
+    border: 1px solid #fecaca;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.875rem;
+    min-width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .btn-remove-field:hover:not(:disabled) {
+    background: #fecaca;
+    border-color: #dc2626;
+  }
+
+  .btn-remove-field:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .btn-add-field {
+    background: #f0f9ff;
+    color: #0369a1;
+    border: 1px solid #bae6fd;
+    padding: 0.75rem;
+    width: 100%;
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+  }
+
+  .btn-add-field:hover {
+    background: #e0f2fe;
+    border-color: #0369a1;
+  }
+
+  /* Dark theme overrides */
+  :global([data-theme="dark"]) .tab-content {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+  }
+
+  :global([data-theme="dark"]) .tab-panel {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+  }
+
+  :global([data-theme="dark"]) .tab-button {
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    border-color: var(--border-secondary);
+  }
+
+  :global([data-theme="dark"]) .tab-button.active {
+    background: var(--bg-secondary);
+    color: var(--text-accent);
+    border-bottom-color: var(--border-accent);
+  }
+
+  :global([data-theme="dark"]) .headers-header,
+  :global([data-theme="dark"]) .params-header {
+    color: var(--text-primary);
+  }
+
+  :global([data-theme="dark"]) .headers-header span,
+  :global([data-theme="dark"]) .params-header span {
+    color: var(--text-primary) !important;
+  }
+
+  :global([data-theme="dark"]) .header-row,
+  :global([data-theme="dark"]) .param-row,
+  :global([data-theme="dark"]) .field-row {
+    background: var(--bg-tertiary);
+    border-color: var(--border-secondary);
+  }
+
+  :global([data-theme="dark"]) .header-input,
+  :global([data-theme="dark"]) .param-input,
+  :global([data-theme="dark"]) .field-input {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border-color: var(--border-primary);
+  }
+
+  :global([data-theme="dark"]) .header-input:focus,
+  :global([data-theme="dark"]) .param-input:focus,
+  :global([data-theme="dark"]) .field-input:focus {
+    border-color: var(--border-accent);
+    box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2);
+  }
+
+  :global([data-theme="dark"]) .textarea {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border-color: var(--border-primary);
+  }
+
+  :global([data-theme="dark"]) .textarea:focus {
+    border-color: var(--border-accent);
+    box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2);
+  }
+
+
+
+  :global([data-theme="dark"]) .description-textarea {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border-color: var(--border-primary);
+  }
+
+  :global([data-theme="dark"]) .description-textarea:focus {
+    border-color: var(--border-accent);
+    box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2);
+  }
+
+  :global([data-theme="dark"]) .btn-remove,
+  :global([data-theme="dark"]) .btn-remove-field {
+    background: var(--error);
+    color: white;
+  }
+
+  :global([data-theme="dark"]) .btn-remove:hover,
+  :global([data-theme="dark"]) .btn-remove-field:hover {
+    background: #dc2626;
+  }
+
+  :global([data-theme="dark"]) .btn-add-field {
+    background: var(--button-primary);
+    color: white;
+    border-color: var(--button-primary);
+  }
+
+  :global([data-theme="dark"]) .btn-add-field:hover {
+    background: var(--button-primary-hover);
+    border-color: var(--button-primary-hover);
+  }
+
+  :global([data-theme="dark"]) .body-type-selector {
+    background: var(--bg-secondary);
+    border-color: var(--border-secondary);
+  }
+
+  :global([data-theme="dark"]) .body-type-option {
+    color: var(--text-primary);
+  }
+
+  :global([data-theme="dark"]) .body-type-option input[type="radio"]:checked + label {
+    color: var(--text-accent);
   }
 </style>

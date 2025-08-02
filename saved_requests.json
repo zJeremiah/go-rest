@@ -6,12 +6,12 @@
       "url": "{{h1}}/posts",
       "method": "POST",
       "headers": {
-        "Content-Type": "{{content_type}}"
+        "Content-Type": "application/json"
       },
-      "body": "{ \"test\": \"something\", \"test2\": \"else\", \"again\": \"new\" }",
+      "body": "{\n  \"test\": \"something\",\n  \"test2\": \"else\",\n  \"again\": \"new\"\n}",
       "params": [],
       "group": "default",
-      "description": "",
+      "description": "add desc",
       "lastResponse": {
         "status": "201 Created",
         "statusCode": 201,
@@ -45,7 +45,7 @@
         "body": "{\n  \"test\": \"something\",\n  \"test2\": \"else\",\n  \"again\": \"new\",\n  \"id\": 101\n}"
       },
       "createdAt": "2025-07-30T19:37:47-06:00",
-      "updatedAt": "2025-08-02T08:48:02-06:00"
+      "updatedAt": "2025-08-02T11:16:28-06:00"
     },
     {
       "id": "bbefcdceaf51d2e5",
@@ -144,7 +144,7 @@
       "headers": {
         "Content-Type": "application/json"
       },
-      "body": "{\"task\":\"task.salesforce\"}",
+      "body": "{\n  \"task\": \"task.salesforce\",\n  \"key\": \"value\"\n}",
       "params": [
         {
           "key": "task",
@@ -153,33 +153,49 @@
         }
       ],
       "group": "task",
-      "description": "test 2",
+      "description": "test 2 description",
       "lastResponse": {
         "status": "200 OK",
         "statusCode": 200,
         "headers": {
           "Content-Type": "application/json",
-          "Date": "Sat, 02 Aug 2025 15:52:45 GMT"
+          "Date": "Sat, 02 Aug 2025 16:26:34 GMT"
         },
-        "body": "{\"Status\":\"DRY RUN ONLY: no time provided using today, using default day iterator, phase found in salesforce.toml\",\"Count\":10,\"Tasks\":[{\"type\":\"task.salesforce\",\"info\":\"?group=publisher_sites\\u0026dest=gs://insights-reporting-us/pipeline/qa/salesforce\\u0026date=2025-08-02\",\"created\":\"2025-08-02T15:52:45Z\",\"id\":\"6cce956c-8356-4702-b090-a9c3028a17fe\",\"meta\":\"cron=2025-08-02T15\\u0026group=publisher_sites\\u0026workflow=salesforce.toml\"},{\"type\":\"task.salesforce\",\"info\":\"?group=products\\u0026dest=gs://insights-reporting-us/pipeline/qa/salesforce\\u0026date=2025-08-02\",\"created\":\"2025-08-02T15:52:45Z\",\"id\":\"3d92d117-3aff-42ae-8334-1c9c2fe40db2\",\"meta\":\"cron=2025-08-02T15\\u0026group=products\\u0026workflow=salesforce.toml\"},{\"type\":\"task.salesforce\",\"info\":\"?group=record_types\\u0026dest=gs://insights-reporting-us/pipeline/qa/salesforce\\u0026date=2025-08-02\",\"created\":\"2025-08-02T15:52:45Z\",\"id\":\"4d3adf7e-3522-4195-9451-7627e75d9616\",\"meta\":\"cron=2025-08-02T15\\u0026group=record_types\\u0026workflow=salesforce.toml\"},{\"type\":\"task.salesforce\",\"info\":\"?group=accounts\\u0026dest=gs://insights-reporting-us/pipeline/qa/salesforce\\u0026date=2025-08-02\",\"created\":\"2025-08-02T15:52:45Z\",\"id\":\"20f07baf-6822-4225-bfc5-658984b9ec76\",\"meta\":\"cron=2025-08-02T15\\u0026group=accounts\\u0026workflow=salesforce.toml\"},{\"type\":\"task.salesforce\",\"info\":\"?group=budgets\\u0026dest=gs://insights-reporting-us/pipeline/qa/salesforce\\u0026date=2025-08-02\",\"created\":\"2025-08-02T15:52:45Z\",\"id\":\"9dd65a55-bdd2-4c78-9da5-de802478f14b\",\"meta\":\"cron=2025-08-02T15\\u0026group=budgets\\u0026workflow=salesforce.toml\"},{\"type\":\"task.salesforce\",\"info\":\"?group=contracts\\u0026dest=gs://insights-reporting-us/pipeline/qa/salesforce\\u0026date=2025-08-02\",\"created\":\"2025-08-02T15:52:45Z\",\"id\":\"817daa96-4dd4-4f6d-b242-486cf342d2b2\",\"meta\":\"cron=2025-08-02T15\\u0026group=contracts\\u0026workflow=salesforce.toml\"},{\"type\":\"task.salesforce\",\"info\":\"?group=users_contacts\\u0026dest=gs://insights-reporting-us/pipeline/qa/salesforce\\u0026date=2025-08-02\",\"created\":\"2025-08-02T15:52:45Z\",\"id\":\"f81c3896-c334-4d9f-83f8-77adf5b9777a\",\"meta\":\"cron=2025-08-02T15\\u0026group=users_contacts\\u0026workflow=salesforce.toml\"},{\"type\":\"task.salesforce\",\"info\":\"?group=entities\\u0026dest=gs://insights-reporting-us/pipeline/qa/salesforce\\u0026date=2025-08-02\",\"created\":\"2025-08-02T15:52:45Z\",\"id\":\"70c20371-fccb-4b7f-80a9-9b7416ec0e30\",\"meta\":\"cron=2025-08-02T15\\u0026group=entities\\u0026workflow=salesforce.toml\"},{\"type\":\"task.salesforce\",\"info\":\"?group=programs\\u0026dest=gs://insights-reporting-us/pipeline/qa/salesforce\\u0026date=2025-08-02\",\"created\":\"2025-08-02T15:52:45Z\",\"id\":\"e3e7e255-ed3e-4519-8f53-ec7e249ceff6\",\"meta\":\"cron=2025-08-02T15\\u0026group=programs\\u0026workflow=salesforce.toml\"},{\"type\":\"task.salesforce\",\"info\":\"?group=account_contact_relationships\\u0026dest=gs://insights-reporting-us/pipeline/qa/salesforce\\u0026date=2025-08-02\",\"created\":\"2025-08-02T15:52:45Z\",\"id\":\"cdbe0b80-5c9f-442a-abf1-b7b3e2cc1fc7\",\"meta\":\"cron=2025-08-02T15\\u0026group=account_contact_relationships\\u0026workflow=salesforce.toml\"}]}"
+        "body": "{\"Status\":\"DRY RUN ONLY: no time provided using today, using default day iterator, phase found in salesforce.toml\",\"Count\":10,\"Tasks\":[{\"type\":\"task.salesforce\",\"info\":\"?group=publisher_sites\\u0026dest=gs://insights-reporting-us/pipeline/qa/salesforce\\u0026date=2025-08-02\",\"created\":\"2025-08-02T16:26:34Z\",\"id\":\"126ff964-5e8c-47c2-8c36-98198d421e37\",\"meta\":\"cron=2025-08-02T16\\u0026group=publisher_sites\\u0026workflow=salesforce.toml\"},{\"type\":\"task.salesforce\",\"info\":\"?group=products\\u0026dest=gs://insights-reporting-us/pipeline/qa/salesforce\\u0026date=2025-08-02\",\"created\":\"2025-08-02T16:26:34Z\",\"id\":\"df42b671-68b5-45ef-b41c-a0d672e358f6\",\"meta\":\"cron=2025-08-02T16\\u0026group=products\\u0026workflow=salesforce.toml\"},{\"type\":\"task.salesforce\",\"info\":\"?group=record_types\\u0026dest=gs://insights-reporting-us/pipeline/qa/salesforce\\u0026date=2025-08-02\",\"created\":\"2025-08-02T16:26:34Z\",\"id\":\"62a29120-1ce7-4b3d-80da-a98ef89877fe\",\"meta\":\"cron=2025-08-02T16\\u0026group=record_types\\u0026workflow=salesforce.toml\"},{\"type\":\"task.salesforce\",\"info\":\"?group=accounts\\u0026dest=gs://insights-reporting-us/pipeline/qa/salesforce\\u0026date=2025-08-02\",\"created\":\"2025-08-02T16:26:34Z\",\"id\":\"7b79c3a0-f6af-43ed-94b9-eac3371744cd\",\"meta\":\"cron=2025-08-02T16\\u0026group=accounts\\u0026workflow=salesforce.toml\"},{\"type\":\"task.salesforce\",\"info\":\"?group=budgets\\u0026dest=gs://insights-reporting-us/pipeline/qa/salesforce\\u0026date=2025-08-02\",\"created\":\"2025-08-02T16:26:34Z\",\"id\":\"ccff57d6-45d5-4785-ad86-71581277457f\",\"meta\":\"cron=2025-08-02T16\\u0026group=budgets\\u0026workflow=salesforce.toml\"},{\"type\":\"task.salesforce\",\"info\":\"?group=contracts\\u0026dest=gs://insights-reporting-us/pipeline/qa/salesforce\\u0026date=2025-08-02\",\"created\":\"2025-08-02T16:26:34Z\",\"id\":\"3039372d-51e5-48e1-901a-9370aa2e231c\",\"meta\":\"cron=2025-08-02T16\\u0026group=contracts\\u0026workflow=salesforce.toml\"},{\"type\":\"task.salesforce\",\"info\":\"?group=users_contacts\\u0026dest=gs://insights-reporting-us/pipeline/qa/salesforce\\u0026date=2025-08-02\",\"created\":\"2025-08-02T16:26:34Z\",\"id\":\"d293b2ad-3e67-484f-8398-65beeba1b937\",\"meta\":\"cron=2025-08-02T16\\u0026group=users_contacts\\u0026workflow=salesforce.toml\"},{\"type\":\"task.salesforce\",\"info\":\"?group=entities\\u0026dest=gs://insights-reporting-us/pipeline/qa/salesforce\\u0026date=2025-08-02\",\"created\":\"2025-08-02T16:26:34Z\",\"id\":\"da32aacc-162c-4f67-91ce-770b08c2a9fc\",\"meta\":\"cron=2025-08-02T16\\u0026group=entities\\u0026workflow=salesforce.toml\"},{\"type\":\"task.salesforce\",\"info\":\"?group=programs\\u0026dest=gs://insights-reporting-us/pipeline/qa/salesforce\\u0026date=2025-08-02\",\"created\":\"2025-08-02T16:26:34Z\",\"id\":\"18c03b8e-0a3c-433e-b8fb-8dd441b7e107\",\"meta\":\"cron=2025-08-02T16\\u0026group=programs\\u0026workflow=salesforce.toml\"},{\"type\":\"task.salesforce\",\"info\":\"?group=account_contact_relationships\\u0026dest=gs://insights-reporting-us/pipeline/qa/salesforce\\u0026date=2025-08-02\",\"created\":\"2025-08-02T16:26:34Z\",\"id\":\"fed0070b-e684-4d99-a327-bc75124d0d53\",\"meta\":\"cron=2025-08-02T16\\u0026group=account_contact_relationships\\u0026workflow=salesforce.toml\"}]}"
       },
       "createdAt": "2025-08-02T08:14:06-06:00",
-      "updatedAt": "2025-08-02T10:07:09-06:00"
+      "updatedAt": "2025-08-02T10:27:39-06:00"
     },
     {
       "id": "c3fcfd6b9e71c0e4",
       "name": "Auth",
-      "url": "https://api.example.com/endpoint",
-      "method": "GET",
+      "url": "https://{{auth-origin}}/auth/realms/rakuten-advertising/protocol/openid-connect/token",
+      "method": "POST",
       "headers": {
-        "Content-Type": "application/json"
+        "Content-Type": "application/x-www-form-urlencoded"
       },
-      "body": "",
+      "body": "grant_type=password\u0026client_secret=1b1b591e-1955-4016-ab2a-bf13e6894d77\u0026username=jeremiah.zink%40rakuten.com\u0026password=J%40zinc197411\u0026client_id=iap",
       "params": [],
       "group": "Signal",
-      "description": "Test",
+      "description": "Auth Token Request",
+      "lastResponse": {
+        "status": "200 OK",
+        "statusCode": 200,
+        "headers": {
+          "Cache-Control": "no-store",
+          "Content-Length": "2997",
+          "Content-Type": "application/json",
+          "Pragma": "no-cache",
+          "Referrer-Policy": "no-referrer",
+          "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+          "X-Content-Type-Options": "nosniff",
+          "X-Frame-Options": "SAMEORIGIN ALLOW-FROM *.google.com *.recaptcha.net https://sephora.affiliatestorefrontslocal.com https://sephora.affiliatestorefrontsqa.com https://sephora.affiliatestorefronts.com https://www.sephora.com",
+          "X-Xss-Protection": "1; mode=block"
+        },
+        "body": "{\"access_token\":\"eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJoRVJCVm5KajFDTGRZbFV0Nk5XRGEwWUM1blQyM3h4WDhtMDJfXzZrc3RNIn0.eyJleHAiOjE3NTQxNjgyNTEsImlhdCI6MTc1NDE1Mzg1MSwianRpIjoiODA2YjcyNjUtMDVlYS00ZmY5LWFkODYtM2QyYTgxYjU2MWVkIiwiaXNzIjoiaHR0cHM6Ly9hdXRoLXN0YWdpbmcubG9jYWwucmFrdXRlbm1hcmtldGluZy5jb20vYXV0aC9yZWFsbXMvcmFrdXRlbi1hZHZlcnRpc2luZyIsInN1YiI6ImI0MmM3NTllLTRlMmItNGNhZS1hNDkwLWEwODY4NGRiMGZiYyIsInR5cCI6IkJlYXJlciIsImF6cCI6ImlhcCIsInNpZCI6ImMyNjY4Mzg1LTM4NTYtNGM2ZC05NTkxLTZjNWYwMmJjZGE3YyIsInNjb3BlIjoiZW1haWwgdXNlci1hdHRyaWJ1dGVzIHByb2ZpbGUgZ3JvdXBzIiwiYWRtaW5fYWNjZXNzIjoidHJ1ZSIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJkaXNwbGF5X2FjY291bnRzIjoia3J1cGEubWVodGFAcmFrdXRlbi5jb20scm0tYnItcWFAbWFpbC5yYWt1dGVuLmNvbSIsImdyb3VwcyI6WyJpYXAtYWRtaW4tdXNlcnMiLCJpYXAtZW5naW5lZXJzIiwiaWFwLXVzZXJzIiwiaW1wZXJzb25hdGUiLCJrb25nLWlhcC1zdXBlci1hZG1pbiIsImtvbmctcmVwb3J0aW5nLXN1cGVyLWFkbWluIiwicHViZGFzaC11c2VycyIsInJlcG9ydGluZy1hcGkiXSwiZ2l2ZW5fbmFtZSI6IkplcmVtaWFoIiwiZGVtb19hY2Nlc3MiOiJ0cnVlIiwidXNlcl90eXBlIjoiZW1wbG95ZWUsZXh0ZXJuYWwscHVibGlzaGVyIiwiYWZmaWxpYXRlX2FjY291bnRzIjoicmNvdHRvLHB1Yl9hXzkwMDAwODI2NTlfMnZOR1JFTGEsYWR2X2FfNDI3NzRfcTlJb0RRaTAscHViX2FfOTAwMDA4MjY1OV85cUNmTWxmSSxyZXBvcnRfYWNfNSxhZHZfYV80MDY0NV9EWWk1Q3F2MyxwdWJfYV85MDAyMTA0OTczX0t1YzdNRDB2LG1vdXNlanAsbGlua3Ntb2tlLHN0eWxpc2gsREVBZHZQREYwMyxGUkFkdlBERjAxLFFhTEdIQXV0b0NBMSxuYXRiaXoyMDEyLEJyYXpUZXN0LGFkdl9hXzQwNjQ1X0RoRld4WHNOLGFkdl9hXzEzNTcyX3RWYVhuU3pnLGFkdl9hXzQwMjA2X3BpeVEyVEc4LEdhbnplcjMiLCJuYW1lIjoiSmVyZW1pYWggWmluayIsImhlbHBfY2VudGVyX3VzZXIiOiJuZXctcHVibGlzaGVyIiwiZmFtaWx5X25hbWUiOiJaaW5rIiwiZW1haWwiOiJqZXJlbWlhaC56aW5rQHJha3V0ZW4uY29tIiwidXNlcm5hbWUiOiJqZXJlbWlhaC56aW5rQHJha3V0ZW4uY29tIn0.f9u7rQ6WJ6uOjUlrS7HtLznrOVJPGpbSkopKsL0ONXItp5dspq4YDtdw0o7M0fkGRJRSn7Nq_rpOldKv04OwcTj33fvBBvzVUeZPlke93pofWaPLo-ZOz89fk6jIKj6eBdeGmT1V_0GqifInDZfVwpkMBkLDNJatqlFIiOqVzd-4qp7SVDl19j0B5WXwwXToTMqWrqive2nj1H8pGRTvsii2rJHUfS956icynr7VYBDh6yDRCQfcq4oiBa0locpb6eM1pqqOKDEkv_85M_fOGcvhkJWbwxKbQCAKIVis8ta2VVL80-w2D6m5m4MsAtT4sUnWsTajS091IGbxF27yRw\",\"expires_in\":14400,\"refresh_expires_in\":14400,\"refresh_token\":\"eyJhbGciOiJIUzUxMiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICIxYWUxYzZiMi0wYjczLTRkMzgtYjAyMS1jM2Q2NGE0NWYzNjUifQ.eyJleHAiOjE3NTQxNjgyNTEsImlhdCI6MTc1NDE1Mzg1MSwianRpIjoiN2U4YzM3YzgtMGFjOS00NDc3LWE5MWMtMzgxYjRhODQ1ODVkIiwiaXNzIjoiaHR0cHM6Ly9hdXRoLXN0YWdpbmcubG9jYWwucmFrdXRlbm1hcmtldGluZy5jb20vYXV0aC9yZWFsbXMvcmFrdXRlbi1hZHZlcnRpc2luZyIsImF1ZCI6Imh0dHBzOi8vYXV0aC1zdGFnaW5nLmxvY2FsLnJha3V0ZW5tYXJrZXRpbmcuY29tL2F1dGgvcmVhbG1zL3Jha3V0ZW4tYWR2ZXJ0aXNpbmciLCJzdWIiOiJiNDJjNzU5ZS00ZTJiLTRjYWUtYTQ5MC1hMDg2ODRkYjBmYmMiLCJ0eXAiOiJSZWZyZXNoIiwiYXpwIjoiaWFwIiwic2lkIjoiYzI2NjgzODUtMzg1Ni00YzZkLTk1OTEtNmM1ZjAyYmNkYTdjIiwic2NvcGUiOiJlbWFpbCBiYXNpYyB1c2VyLWF0dHJpYnV0ZXMgcHJvZmlsZSBncm91cHMifQ.OkY-LLt2WxzbNPXLD4zMSVqIV9hr3q-riTUxTBGrTuqdjZlJOuOL2MIxljkHfRSRQ4UiYA5-gBdNCrSiBkORwg\",\"token_type\":\"Bearer\",\"not-before-policy\":1679329081,\"session_state\":\"c2668385-3856-4c6d-9591-6c5f02bcda7c\",\"scope\":\"email user-attributes profile groups\"}"
+      },
       "createdAt": "2025-08-02T09:53:48-06:00",
-      "updatedAt": "2025-08-02T10:06:23-06:00"
+      "updatedAt": "2025-08-02T11:20:53-06:00"
     }
   ],
   "variables": [
@@ -208,10 +224,26 @@
         {
           "key": "task-origin",
           "value": "iap-pipeline-qa.private.linksynergy.com:8080"
+        },
+        {
+          "key": "auth-origin",
+          "value": "auth-staging.local.rakutenmarketing.com"
+        },
+        {
+          "key": "client_secret",
+          "value": "1b1b591e-1955-4016-ab2a-bf13e6894d77"
+        },
+        {
+          "key": "username",
+          "value": "jeremiah.zink@rakuten.com"
+        },
+        {
+          "key": "password",
+          "value": "J@zinc197411"
         }
       ],
       "createdAt": "2025-08-01T18:04:56-06:00",
-      "updatedAt": "2025-08-02T08:20:47-06:00"
+      "updatedAt": "2025-08-02T10:47:21-06:00"
     },
     {
       "id": "21bb1bea5a43b540",
@@ -261,5 +293,6 @@
       "createdAt": "2025-08-02T09:53:40-06:00",
       "updatedAt": "2025-08-02T09:53:40-06:00"
     }
-  ]
+  ],
+  "wordWrap": false
 }

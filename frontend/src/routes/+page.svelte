@@ -37,6 +37,9 @@
   let selectedGroup = 'all'; // Start with 'all' to show everything initially
   let filteredRequests = [];
   
+  // UI Settings
+  let wordWrap = false;
+  
   // Environment modal states
   let showCreateEnvironmentModal = false;
   let showCopyEnvironmentModal = false;
@@ -408,7 +411,9 @@
       if (res.ok) {
         const data = await res.json();
         const newRequests = data.requests || [];
-
+        
+        // Load word wrap setting
+        wordWrap = data.wordWrap || false;
 
         // Ensure proper isolation by creating new objects
         savedRequests = newRequests.map(req => ({
@@ -469,6 +474,30 @@
     } catch (error) {
       console.error('❌ Error saving variables:', error);
     }
+  }
+
+  async function saveWordWrap() {
+    try {
+      const res = await fetch('/api/settings/wordwrap', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ wordWrap })
+      });
+
+      if (!res.ok) {
+        console.error('❌ Failed to save word wrap setting');
+      }
+    } catch (error) {
+      console.error('❌ Error saving word wrap setting:', error);
+    }
+  }
+
+  // Handle word wrap change from ResponseDisplay component
+  function handleWordWrapChange(event) {
+    wordWrap = event.detail.wordWrap;
+    saveWordWrap();
   }
 
   // Environment management functions
@@ -1254,7 +1283,7 @@
   
   <!-- Response Section -->
   <div class="response-section">
-    <ResponseDisplay {response} {loading} />
+    <ResponseDisplay {response} {loading} {wordWrap} on:wordWrapChange={handleWordWrapChange} />
   </div>
 </div>
 
@@ -1661,6 +1690,11 @@
 
   .btn-add:active {
     transform: translateY(0);
+  }
+
+  /* Dark theme overrides for btn-add */
+  :global([data-theme="dark"]) .btn-add:hover {
+    box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
   }
 
   .empty-state {

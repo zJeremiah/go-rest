@@ -80,6 +80,7 @@ type SavedRequestsData struct {
 	Environments       []Environment  `json:"environments"`
 	CurrentEnvironment string         `json:"currentEnvironment"`
 	Groups             []Group        `json:"groups"`
+	WordWrap           bool           `json:"wordWrap"`
 }
 
 func main() {
@@ -115,6 +116,9 @@ func main() {
 		r.Delete("/groups/{id}", handleDeleteGroup)
 		r.Post("/environments/{id}/copy", handleCopyEnvironment)
 		r.Post("/environments/{id}/activate", handleActivateEnvironment)
+
+		// UI settings endpoints
+		r.Post("/settings/wordwrap", handleSaveWordWrap)
 	})
 
 	// Check if frontend/dist exists
@@ -1592,6 +1596,49 @@ func handleDeleteGroup(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(map[string]string{"status": "deleted"}); err != nil {
 		log.Printf("❌ Failed to encode delete response: %v", err)
+	}
+}
+
+// handleSaveWordWrap saves the word wrap setting
+func handleSaveWordWrap(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		WordWrap bool `json:"wordWrap"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("❌ Invalid word wrap request body: %v", err)
+		respondWithError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Load current data
+	data, err := loadSavedRequests()
+	if err != nil {
+		log.Printf("❌ Failed to load data for word wrap update: %v", err)
+		respondWithError(w, "Failed to load data", http.StatusInternalServerError)
+		return
+	}
+
+	// Update word wrap setting
+	data.WordWrap = req.WordWrap
+
+	// Save to file
+	if err := saveSavedRequests(data); err != nil {
+		log.Printf("❌ Failed to save word wrap setting: %v", err)
+		respondWithError(w, "Failed to save word wrap setting", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("✅ Updated word wrap setting to: %t", req.WordWrap)
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]bool{"wordWrap": req.WordWrap}); err != nil {
+		log.Printf("❌ Failed to encode word wrap response: %v", err)
 	}
 }
 

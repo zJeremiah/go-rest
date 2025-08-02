@@ -1,13 +1,15 @@
 <script>
+  import { createEventDispatcher } from 'svelte';
   
   export let response = null;
   export let loading = false;
+  export let wordWrap = false;
 
+  const dispatch = createEventDispatcher();
   let hljs;
   let responseBodyElement;
   let highlightLoaded = false;
   let activeTab = 'body';
-  let wordWrap = false;
 
   const tabs = [
     { id: 'body', label: 'Response Body', icon: '📄' },
@@ -48,6 +50,10 @@
     } catch {
       return false;
     }
+  }
+
+  function handleWordWrapChange() {
+    dispatch('wordWrapChange', { wordWrap });
   }
 
   async function highlightCode(code, language = 'json') {
@@ -226,6 +232,7 @@
                       <input 
                         type="checkbox" 
                         bind:checked={wordWrap}
+                        on:change={handleWordWrapChange}
                       />
                       Word Wrap
                     </label>
@@ -561,7 +568,7 @@
     padding: 0 !important;
   }
 
-  /* Highlight.js token styles - ensuring visibility */
+  /* Highlight.js token styles - light theme */
   :global(.hljs-punctuation) {
     color: #24292e !important;
     opacity: 1 !important;
@@ -590,6 +597,31 @@
   :global(.hljs-keyword) {
     color: #d73a49 !important;
     opacity: 1 !important;
+  }
+
+  /* Dark theme overrides - must come after the above styles */
+  :global([data-theme="dark"] .hljs-punctuation) {
+    color: #d1d5db !important; /* Light gray for brackets, braces, commas */
+  }
+  
+  :global([data-theme="dark"] .hljs-attr) {
+    color: #60a5fa !important; /* Light blue for JSON keys */
+  }
+  
+  :global([data-theme="dark"] .hljs-string) {
+    color: #86efac !important; /* Light green for string values */
+  }
+  
+  :global([data-theme="dark"] .hljs-number) {
+    color: #fbbf24 !important; /* Light yellow for numbers */
+  }
+  
+  :global([data-theme="dark"] .hljs-literal) {
+    color: #a78bfa !important; /* Light purple for true/false/null */
+  }
+  
+  :global([data-theme="dark"] .hljs-keyword) {
+    color: #f87171 !important; /* Light red for keywords */
   }
 
   /* Enable text selection for response content */
@@ -684,5 +716,118 @@
   :global(.plain-text *) {
     color: inherit !important;
     background: transparent !important;
+  }
+
+  /* Dark theme overrides */
+  :global([data-theme="dark"]) .tab-content {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+  }
+
+  :global([data-theme="dark"]) .tab-panel {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+  }
+
+  :global([data-theme="dark"]) .tab-button {
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    border-color: var(--border-secondary);
+  }
+
+  :global([data-theme="dark"]) .tab-button.active {
+    background: var(--bg-secondary);
+    color: var(--text-accent);
+    border-bottom-color: var(--border-accent);
+  }
+
+  :global([data-theme="dark"]) .tab-count {
+    background: var(--bg-accent);
+    color: var(--text-primary);
+  }
+
+  :global([data-theme="dark"]) .tab-button.active .tab-count {
+    background: var(--border-accent);
+    color: white;
+  }
+
+  :global([data-theme="dark"]) .body-header,
+  :global([data-theme="dark"]) .headers-header {
+    color: var(--text-primary);
+  }
+
+  :global([data-theme="dark"]) .response-body {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border-color: var(--border-primary);
+  }
+
+  :global([data-theme="dark"]) .response-body pre {
+    background: var(--bg-primary);
+    color: #e5e7eb !important;
+  }
+
+  :global([data-theme="dark"]) .response-body code {
+    background: var(--bg-primary);
+    color: #e5e7eb !important;
+  }
+
+  :global([data-theme="dark"]) .response-body.word-wrap pre {
+    background: var(--bg-primary);
+    color: #e5e7eb !important;
+  }
+
+  :global([data-theme="dark"]) .response-body.word-wrap code {
+    background: var(--bg-primary);
+    color: #e5e7eb !important;
+  }
+
+  /* Ensure syntax highlighting doesn't override our dark theme colors */
+  :global([data-theme="dark"]) .response-body pre *,
+  :global([data-theme="dark"]) .response-body code * {
+    color: #e5e7eb !important;
+  }
+
+
+
+
+
+
+
+  :global([data-theme="dark"]) .body-info,
+  :global([data-theme="dark"]) .body-actions {
+    color: var(--text-secondary);
+  }
+
+  :global([data-theme="dark"]) .body-size,
+  :global([data-theme="dark"]) .format-indicator {
+    background: var(--bg-accent);
+    color: var(--text-primary);
+  }
+
+  :global([data-theme="dark"]) .wrap-toggle {
+    color: var(--text-primary);
+  }
+
+  :global([data-theme="dark"]) .btn-small {
+    background: var(--button-secondary);
+    color: var(--text-primary);
+    border-color: var(--border-secondary);
+  }
+
+  :global([data-theme="dark"]) .btn-small:hover {
+    background: var(--button-secondary-hover);
+    border-color: var(--border-accent);
+  }
+
+  :global([data-theme="dark"]) .status-info {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border-color: var(--border-secondary);
+  }
+
+  :global([data-theme="dark"]) .loading-spinner {
+    border-color: var(--border-secondary);
+    border-top-color: var(--text-accent);
   }
 </style>
