@@ -159,6 +159,7 @@
         headers: requestToUpdate.headers,
         body: requestToUpdate.body,
         params: requestToUpdate.params,
+        group: requestToUpdate.group || 'default',
         lastResponse: responseData
       };
 
@@ -203,6 +204,8 @@
         params: requestData.params || [],
         group: requestData.group || selectedRequest.group || 'default'
       };
+
+
 
 
 

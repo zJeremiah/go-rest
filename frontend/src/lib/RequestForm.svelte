@@ -231,7 +231,12 @@
   function handleGroupChange() {
     if (selectedRequest) {
       clearTimeout(urlSaveTimeout);
+      // Force save immediately for group changes
       saveCurrentRequest();
+      // Also trigger a manual save to be extra sure
+      setTimeout(() => {
+        saveCurrentRequest();
+      }, 100);
     }
   }
 
