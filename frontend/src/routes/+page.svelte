@@ -587,12 +587,8 @@
         const data = await res.json();
         groups = data.groups || [];
 
-        
-        // Ensure selectedGroup exists in groups
-        const selectedGroupExists = groups.some(g => g.name === selectedGroup);
-        if (!selectedGroupExists && groups.length > 0) {
-          selectedGroup = groups[0].name;
-        }
+        // Auto-select the last selected group after loading
+        autoSelectLastGroup();
         
         // Force filtering after groups are loaded
         filterRequestsByGroup();
@@ -692,6 +688,9 @@
     } else {
       filteredRequests = savedRequests.filter(req => req.group === selectedGroup);
     }
+    
+    // Store selected group in localStorage for persistence
+    localStorage.setItem('lastSelectedGroup', selectedGroup);
   }
 
   // Reactive statement to update filtered requests when savedRequests or selectedGroup changes
@@ -829,6 +828,20 @@
 
       // If no previous selection, select the first request
       selectRequest(savedRequests[0]);
+    }
+  }
+
+  // Auto-select the last selected group
+  function autoSelectLastGroup() {
+    const lastSelectedGroup = localStorage.getItem('lastSelectedGroup');
+    if (lastSelectedGroup && groups.length > 0) {
+      // Check if the last selected group still exists (including 'all')
+      if (lastSelectedGroup === 'all' || groups.some(g => g.name === lastSelectedGroup)) {
+        selectedGroup = lastSelectedGroup;
+      } else {
+        // If the last selected group doesn't exist anymore, default to 'all'
+        selectedGroup = 'all';
+      }
     }
   }
 
