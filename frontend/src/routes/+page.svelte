@@ -690,7 +690,6 @@
     }
     
     // Store selected group in localStorage for persistence
-    console.log('💾 Saving group to localStorage:', selectedGroup);
     localStorage.setItem('lastSelectedGroup', selectedGroup);
   }
 
@@ -835,16 +834,13 @@
   // Auto-select the last selected group
   function autoSelectLastGroup() {
     const lastSelectedGroup = localStorage.getItem('lastSelectedGroup');
-    console.log('🔄 Restoring group from localStorage:', lastSelectedGroup);
     if (lastSelectedGroup && groups.length > 0) {
       // Check if the last selected group still exists (including 'all')
       if (lastSelectedGroup === 'all' || groups.some(g => g.name === lastSelectedGroup)) {
         selectedGroup = lastSelectedGroup;
-        console.log('✅ Group restored to:', selectedGroup);
       } else {
         // If the last selected group doesn't exist anymore, default to 'all'
         selectedGroup = 'all';
-        console.log('⚠️ Group not found, defaulting to: all');
       }
     }
   }
@@ -1675,7 +1671,7 @@
   .requests-list {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 0.25rem;
     max-height: calc(100vh - 300px);
     overflow-y: auto;
   }
@@ -1705,7 +1701,7 @@
 
   .request-content {
     flex: 1;
-    padding: 0.75rem;
+    padding: 0.5rem;
     cursor: pointer;
   }
 
@@ -1719,15 +1715,15 @@
   .action-btn {
     background: transparent;
     border: none;
-    padding: 0.5rem;
+    padding: 0.375rem;
     cursor: pointer;
     font-size: 0.75rem;
     transition: all 0.2s ease;
     display: flex;
     align-items: center;
     justify-content: center;
-    min-height: 32px;
-    min-width: 32px;
+    min-height: 28px;
+    min-width: 28px;
   }
 
   .action-btn:hover {
@@ -1756,12 +1752,12 @@
   .request-header {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    margin-bottom: 0.5rem;
+    gap: 0.375rem;
+    margin-bottom: 0.25rem;
   }
 
   .method-badge {
-    padding: 0.125rem 0.375rem;
+    padding: 0.1rem 0.3rem;
     border-radius: 0.25rem;
     font-size: 0.625rem;
     font-weight: 600;
@@ -1818,11 +1814,11 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 0.5rem;
+    gap: 0.375rem;
   }
 
   .status-badge {
-    padding: 0.125rem 0.375rem;
+    padding: 0.1rem 0.3rem;
     border-radius: 0.25rem;
     font-size: 0.625rem;
     font-weight: 600;
