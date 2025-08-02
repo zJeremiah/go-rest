@@ -690,11 +690,12 @@
     }
     
     // Store selected group in localStorage for persistence
+    console.log('💾 Saving group to localStorage:', selectedGroup);
     localStorage.setItem('lastSelectedGroup', selectedGroup);
   }
 
   // Reactive statement to update filtered requests when savedRequests or selectedGroup changes
-  $: if (savedRequests && savedRequests.length >= 0) {
+  $: if (savedRequests && savedRequests.length >= 0 && groups.length > 0) {
     filterRequestsByGroup();
   }
 
@@ -834,13 +835,16 @@
   // Auto-select the last selected group
   function autoSelectLastGroup() {
     const lastSelectedGroup = localStorage.getItem('lastSelectedGroup');
+    console.log('🔄 Restoring group from localStorage:', lastSelectedGroup);
     if (lastSelectedGroup && groups.length > 0) {
       // Check if the last selected group still exists (including 'all')
       if (lastSelectedGroup === 'all' || groups.some(g => g.name === lastSelectedGroup)) {
         selectedGroup = lastSelectedGroup;
+        console.log('✅ Group restored to:', selectedGroup);
       } else {
         // If the last selected group doesn't exist anymore, default to 'all'
         selectedGroup = 'all';
+        console.log('⚠️ Group not found, defaulting to: all');
       }
     }
   }
