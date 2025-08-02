@@ -28,11 +28,22 @@
     }
   }
 
-  function formatJSON(str) {
+  function formatJSON(data) {
     try {
-      return JSON.stringify(JSON.parse(str), null, 2);
+      // If it's already an object, stringify it directly
+      if (typeof data === 'object' && data !== null) {
+        return JSON.stringify(data, null, 2);
+      }
+      
+      // If it's a string, parse then stringify
+      if (typeof data === 'string') {
+        return JSON.stringify(JSON.parse(data), null, 2);
+      }
+      
+      // For other types, convert to string
+      return String(data);
     } catch {
-      return str;
+      return String(data);
     }
   }
 
@@ -43,33 +54,54 @@
     return 'status-warning';
   }
 
-  function isJSON(str) {
-    try {
-      JSON.parse(str);
+  function isJSON(data) {
+    // If it's already an object (parsed JSON), it's JSON
+    if (typeof data === 'object' && data !== null) {
       return true;
-    } catch {
-      return false;
     }
+    
+    // If it's a string, try to parse it
+    if (typeof data === 'string') {
+      try {
+        JSON.parse(data);
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    
+    return false;
   }
 
   function handleWordWrapChange() {
     dispatch('wordWrapChange', { wordWrap });
   }
 
-  async function highlightCode(code, language = 'json') {
-    if (!code) return code;
+  // Helper function to safely get response body as string
+  function getResponseBodyAsString(body) {
+    if (body === null || body === undefined) {
+      return '';
+    }
+    if (typeof body === 'string') {
+      return body;
+    }
+    if (typeof body === 'object') {
+      return JSON.stringify(body, null, 2);
+    }
+    return String(body);
+  }
+
+  async function highlightCode(codeString, language = 'json') {
+    if (!codeString) return codeString;
     
     await loadHighlight();
     
-    if (!hljs) return code;
+    if (!hljs) return codeString;
     
     try {
-      if (language === 'json' && isJSON(code)) {
-        code = formatJSON(code);
-      }
-      return hljs.default.highlight(code, { language }).value;
+      return hljs.default.highlight(codeString, { language }).value;
     } catch {
-      return code;
+      return codeString;
     }
   }
 
@@ -84,10 +116,13 @@
   let lastResponseBody = '';
 
   // Update highlighting when response changes
-  $: if (responseBodyElement && response && response.body !== lastResponseBody) {
-
-    lastResponseBody = response.body || '';
-    updateHighlighting();
+  $: if (responseBodyElement && response && response.body !== undefined) {
+    const currentBody = getResponseBodyAsString(response.body);
+    
+    if (currentBody !== lastResponseBody) {
+      lastResponseBody = currentBody;
+      updateHighlighting();
+    }
   }
 
   // Handle tab switching to body tab
@@ -114,12 +149,15 @@
         // Get the code element inside the pre element
         const codeElement = responseBodyElement.querySelector('code');
         
+        // Get the response body as a safe string
+        const bodyString = getResponseBodyAsString(response.body);
+        
         // Check if content is JSON - only highlight JSON content
         if (isJSON(response.body)) {
           // Content is JSON, apply syntax highlighting
-          const highlighted = await highlightCode(response.body);
+          const highlighted = await highlightCode(bodyString);
           
-          if (highlighted && highlighted !== response.body && highlighted.trim()) {
+          if (highlighted && highlighted !== bodyString && highlighted.trim()) {
             // Highlighting worked, use it
             if (codeElement) {
               codeElement.innerHTML = highlighted;
@@ -128,24 +166,23 @@
             }
           } else {
             // Highlighting failed, use formatted JSON
-            const formattedText = formatJSON(response.body);
             if (codeElement) {
-              codeElement.textContent = formattedText;
+              codeElement.textContent = bodyString;
             } else {
-              responseBodyElement.textContent = formattedText;
+              responseBodyElement.textContent = bodyString;
             }
           }
         } else {
           // Content is NOT JSON (error messages, plain text, etc.)
           // Display as plain dark text without any highlighting
           if (codeElement) {
-            codeElement.textContent = response.body;
+            codeElement.textContent = bodyString;
             // Remove any highlight.js classes and add plain text class
             codeElement.className = 'plain-text';
             codeElement.style.color = '#212529';
             codeElement.style.backgroundColor = 'transparent';
           } else {
-            responseBodyElement.textContent = response.body;
+            responseBodyElement.textContent = bodyString;
             responseBodyElement.className = 'plain-text';
             responseBodyElement.style.color = '#212529';
             responseBodyElement.style.backgroundColor = 'transparent';
@@ -157,14 +194,15 @@
       // Fallback to plain text formatting
       if (responseBodyElement) {
         const codeElement = responseBodyElement.querySelector('code');
+        const textContent = getResponseBodyAsString(response.body);
         
         if (codeElement) {
-          codeElement.textContent = response.body;
+          codeElement.textContent = textContent;
           codeElement.className = 'plain-text';
           codeElement.style.color = '#212529';
           codeElement.style.backgroundColor = 'transparent';
         } else {
-          responseBodyElement.textContent = response.body;
+          responseBodyElement.textContent = textContent;
           responseBodyElement.className = 'plain-text';
           responseBodyElement.style.color = '#212529';
           responseBodyElement.style.backgroundColor = 'transparent';
@@ -222,7 +260,7 @@
               <div class="tab-panel">
                 <div class="body-header">
                   <div class="body-info">
-                    <span class="body-size">{new Blob([response.body]).size} bytes</span>
+                    <span class="body-size">{new Blob([getResponseBodyAsString(response.body)]).size} bytes</span>
                     {#if isJSON(response.body)}
                       <span class="format-indicator">JSON</span>
                     {/if}
@@ -238,7 +276,7 @@
                     </label>
                     <button 
                       class="btn-small" 
-                      on:click={() => copyToClipboard(response.body)}
+                      on:click={() => copyToClipboard(getResponseBodyAsString(response.body))}
                     >
                       📋 Copy
                     </button>

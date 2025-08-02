@@ -73,7 +73,11 @@
   function processTemplate(input, vars) {
     if (!input || !vars) return input;
     
-    let result = input;
+    // Convert input to string if it's an object
+    let result = typeof input === 'string' ? input : 
+                 typeof input === 'object' && input !== null ? JSON.stringify(input) : 
+                 String(input);
+    
     vars.forEach(variable => {
       if (variable.key && variable.value !== undefined) {
         const regex = new RegExp(`{{\\s*${variable.key}\\s*}}`, 'g');
@@ -99,7 +103,12 @@
   function analyzeVariables(input, vars) {
     if (!input || !vars) return { hasVariables: false, tooltip: '' };
     
-    const variableMatches = input.match(/\{\{\s*([^}]+)\s*\}\}/g);
+    // Convert input to string if it's an object
+    const inputString = typeof input === 'string' ? input : 
+                       typeof input === 'object' && input !== null ? JSON.stringify(input) : 
+                       String(input);
+    
+    const variableMatches = inputString.match(/\{\{\s*([^}]+)\s*\}\}/g);
     if (!variableMatches) return { hasVariables: false, tooltip: '' };
     
     const tooltips = variableMatches.map(match => {
