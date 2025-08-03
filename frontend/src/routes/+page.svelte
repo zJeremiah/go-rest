@@ -36,6 +36,7 @@
   let groups = [];
   let selectedGroup = 'all'; // Start with 'all' to show everything initially
   let filteredRequests = [];
+  let searchText = ''; // Search filter for request names and URLs
   
   // UI Settings
   let wordWrap = false;
@@ -676,7 +677,7 @@
         
         // Force filtering after requests are loaded
         if (groups.length > 0) {
-          filterRequestsByGroup();
+          filterRequests();
         }
       }
     } catch (error) {
@@ -864,7 +865,7 @@
         autoSelectLastGroup();
         
         // Force filtering after groups are loaded
-        filterRequestsByGroup();
+        filterRequests();
       }
     } catch (error) {
       console.error('❌ Error loading groups:', error);
@@ -954,21 +955,38 @@
     }
   }
 
-  // Filter requests by selected group
-  function filterRequestsByGroup() {
-    if (selectedGroup === 'all') {
-      filteredRequests = [...savedRequests];
-    } else {
-      filteredRequests = savedRequests.filter(req => req.group === selectedGroup);
+  // Filter requests by selected group and search text
+  function filterRequests() {
+    let requests = [...savedRequests];
+    
+    // First filter by group if not 'all'
+    if (selectedGroup !== 'all') {
+      requests = requests.filter(req => req.group === selectedGroup);
     }
+    
+    // Then filter by search text if provided
+    if (searchText.trim()) {
+      const search = searchText.toLowerCase().trim();
+      requests = requests.filter(req => 
+        req.name.toLowerCase().includes(search) || 
+        req.url.toLowerCase().includes(search)
+      );
+    }
+    
+    filteredRequests = requests;
     
     // Store selected group in localStorage for persistence
     localStorage.setItem('lastSelectedGroup', selectedGroup);
   }
 
-  // Reactive statement to update filtered requests when savedRequests or selectedGroup changes
+  // Reactive statement to update filtered requests when savedRequests, selectedGroup, or searchText changes
   $: if (savedRequests && savedRequests.length >= 0 && groups.length > 0) {
-    filterRequestsByGroup();
+    filterRequests();
+  }
+  
+  // Also update filters when search text changes
+  $: if (searchText !== undefined) {
+    filterRequests();
   }
 
   // Environment modal handlers
@@ -1195,6 +1213,20 @@
   // Load theme immediately to prevent FOUC
   loadSavedTheme();
 
+  // Handle keyboard shortcuts
+  function handleKeyboardShortcuts(event) {
+    // Check for Cmd+Enter (Mac) or Ctrl+Enter (Windows/Linux)
+    if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+      // Prevent default behavior
+      event.preventDefault();
+      
+      // Only send if we have a selected request and not currently loading
+      if (selectedRequest && !loading && requestFormRef?.handleSubmit) {
+        requestFormRef.handleSubmit();
+      }
+    }
+  }
+
   // Helper functions for name uniqueness
   function isNameUnique(name, excludeId = null) {
     return !savedRequests.some(request => 
@@ -1245,10 +1277,18 @@
       }
     }
     
+    // Add keyboard shortcut listener
+    window.addEventListener('keydown', handleKeyboardShortcuts);
+    
     // Load saved requests and environments from server
     loadSavedRequests();
     loadEnvironments();
     loadGroups();
+    
+    // Cleanup function to remove event listener
+    return () => {
+      window.removeEventListener('keydown', handleKeyboardShortcuts);
+    };
   });
 </script>
 
@@ -1355,28 +1395,52 @@
 
         <!-- Group Filter Section -->
         <div class="group-filter-section">
-          <div class="group-selector">
-            <label for="group-select">Filter by Group:</label>
-            <select 
-              id="group-select" 
-              bind:value={selectedGroup} 
-              on:change={() => filterRequestsByGroup()}
-              class="group-select"
-            >
-              <option value="all">All Groups</option>
-              {#each groups as group}
-                <option value={group.name}>{group.name}</option>
-              {/each}
-            </select>
-          </div>
-          <div class="group-actions">
-            {#if selectedGroup !== 'all' && selectedGroup !== 'default'}
-              <button 
-                class="btn-group-delete" 
-                on:click={() => handleDeleteGroup(groups.find(g => g.name === selectedGroup))}
-                title="Delete selected group"
+          <div class="filter-row">
+            <div class="group-selector">
+              <label for="group-select">Filter by Group:</label>
+              <select 
+                id="group-select" 
+                bind:value={selectedGroup} 
+                on:change={() => filterRequests()}
+                class="group-select"
               >
-                🗑️ Delete Group
+                <option value="all">All Groups</option>
+                {#each groups as group}
+                  <option value={group.name}>{group.name}</option>
+                {/each}
+              </select>
+            </div>
+            <div class="group-actions">
+              {#if selectedGroup !== 'all' && selectedGroup !== 'default'}
+                <button 
+                  class="btn-group-delete" 
+                  on:click={() => handleDeleteGroup(groups.find(g => g.name === selectedGroup))}
+                  title="Delete selected group"
+                >
+                  🗑️ Delete Group
+                </button>
+              {/if}
+            </div>
+          </div>
+          
+          <!-- Search Filter Section -->
+          <div class="search-filter">
+            <label for="search-input">Search Requests:</label>
+            <input 
+              id="search-input"
+              type="text" 
+              bind:value={searchText}
+              placeholder="Search by name or URL..."
+              class="search-input"
+            />
+            {#if searchText}
+              <button 
+                type="button" 
+                class="clear-search" 
+                on:click={() => searchText = ''}
+                title="Clear search"
+              >
+                ✕
               </button>
             {/if}
           </div>
@@ -1390,9 +1454,14 @@
           </div>
         {:else if filteredRequests.length === 0}
           <div class="empty-state">
-            <div class="empty-icon">📁</div>
-            <p>No requests in "{selectedGroup}" group.</p>
-            <p class="empty-hint">Add a request to this group or select a different group.</p>
+            <div class="empty-icon">🔍</div>
+            {#if searchText}
+              <p>No requests found matching "{searchText}".</p>
+              <p class="empty-hint">Try a different search term or clear the search.</p>
+            {:else}
+              <p>No requests in "{selectedGroup}" group.</p>
+              <p class="empty-hint">Add a request to this group or select a different group.</p>
+            {/if}
           </div>
         {:else}
           <div class="requests-list">
@@ -1562,6 +1631,7 @@
               class="btn-send" 
               disabled={loading || !selectedRequest}
               on:click={() => requestFormRef?.handleSubmit()}
+              title="Send request (⌘+Enter on Mac, Ctrl+Enter on Windows/Linux)"
             >
               {#if loading}
                 ⏳ Sending...
@@ -1569,6 +1639,7 @@
                 🚀 Send
               {/if}
             </button>
+            <span class="keyboard-hint">⌘+Enter</span>
           </div>
         </div>
       {:else}
@@ -1819,8 +1890,8 @@
   @media (min-width: 1024px) {
     .container {
       flex-direction: row;
-      min-height: calc(100vh - 200px); /* Account for header, but allow expansion */
-      max-height: calc(100vh - 140px); /* More flexible max height */
+      min-height: calc(100vh - 60px); /* Account for top padding */
+      max-height: calc(100vh - 40px); /* More flexible max height */
     }
   }
 
@@ -2085,8 +2156,6 @@
     display: flex;
     flex-direction: column;
     gap: 0.25rem;
-    max-height: calc(100vh - 250px);
-    overflow-y: auto;
     padding-bottom: 2rem;
   }
 
@@ -2255,7 +2324,7 @@
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
-    max-height: calc(100vh - 400px);
+    max-height: calc(100vh - 270px);
     overflow-y: auto;
   }
 
@@ -2595,13 +2664,19 @@
   /* Group Filter Section */
   .group-filter-section {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    flex-direction: column;
+    gap: 0.75rem;
     margin-bottom: 0.75rem;
-    padding: 0.5rem;
+    padding: 0.75rem;
     background: var(--bg-accent);
     border-radius: 6px;
     border: 1px solid var(--border-primary);
+  }
+  
+  .filter-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
   }
 
   .group-selector {
@@ -2637,6 +2712,61 @@
     outline: none;
     border-color: var(--border-accent);
     box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+  }
+
+  /* Search Filter Styling */
+  .search-filter {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    position: relative;
+  }
+
+  .search-filter label {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    white-space: nowrap;
+  }
+
+  .search-input {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-primary);
+    border-radius: 4px;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    transition: all 0.2s ease;
+    flex: 1;
+    min-width: 200px;
+  }
+
+  .search-input:hover {
+    border-color: var(--border-accent);
+  }
+
+  .search-input:focus {
+    outline: none;
+    border-color: var(--border-accent);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+  }
+
+  .clear-search {
+    position: absolute;
+    right: 0.5rem;
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 0.875rem;
+    padding: 0.125rem;
+    border-radius: 2px;
+    transition: all 0.2s ease;
+  }
+
+  .clear-search:hover {
+    background: var(--bg-accent);
+    color: var(--text-primary);
   }
 
   .group-actions {
@@ -2938,6 +3068,15 @@
   .btn-send:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+
+  .keyboard-hint {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-left: 0.5rem;
+    opacity: 0.7;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    white-space: nowrap;
   }
 
   .no-request-selected {
