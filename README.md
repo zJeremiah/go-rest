@@ -69,7 +69,7 @@ A modern, lightweight REST API testing tool built with Go and Svelte. Test your 
    ```
 
 6. **Open your browser**
-   Navigate to `http://localhost:8080`
+   Navigate to `http://localhost:83333`
 
 ## 🔧 Usage
 

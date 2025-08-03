@@ -37,6 +37,8 @@
   let selectedGroup = 'all'; // Start with 'all' to show everything initially
   let filteredRequests = [];
   let searchText = ''; // Search filter for request names and URLs
+  let variableSearchText = ''; // Search filter for variables
+  let filteredVariables = []; // Filtered variables array
   
   // UI Settings
   let wordWrap = false;
@@ -989,6 +991,29 @@
     filterRequests();
   }
 
+  // Filter variables by search text
+  function filterVariables() {
+    if (!variableSearchText.trim()) {
+      filteredVariables = [...variables];
+    } else {
+      const search = variableSearchText.toLowerCase().trim();
+      filteredVariables = variables.filter(variable => 
+        variable.key.toLowerCase().includes(search) || 
+        variable.value.toLowerCase().includes(search)
+      );
+    }
+  }
+
+  // Reactive statement to update filtered variables when variables or search text changes
+  $: if (variables) {
+    filterVariables();
+  }
+  
+  // Also update variable filters when search text changes
+  $: if (variableSearchText !== undefined) {
+    filterVariables();
+  }
+
   // Environment modal handlers
   async function handleCreateEnvironment() {
     if (!newEnvironmentName.trim()) {
@@ -1528,6 +1553,32 @@
               ➕ Add Variable
             </button>
           </div>
+          
+          <!-- Variables Search Filter -->
+          {#if variables.length > 0}
+            <div class="variables-search-section">
+              <div class="variables-search-filter">
+                <label for="variable-search-input">Search Variables:</label>
+                <input 
+                  id="variable-search-input"
+                  type="text" 
+                  bind:value={variableSearchText}
+                  placeholder="Search by name or value..."
+                  class="variable-search-input"
+                />
+                {#if variableSearchText}
+                  <button 
+                    type="button" 
+                    class="clear-variable-search" 
+                    on:click={() => variableSearchText = ''}
+                    title="Clear search"
+                  >
+                    ✕
+                  </button>
+                {/if}
+              </div>
+            </div>
+          {/if}
         </div>
 
         {#if variables.length === 0}
@@ -1536,23 +1587,30 @@
             <p>No variables defined yet.</p>
             <p class="empty-hint">Add variables to use in URLs, headers, and params with template syntax.</p>
           </div>
+        {:else if filteredVariables.length === 0}
+          <div class="empty-state">
+            <div class="empty-icon">🔍</div>
+            <p>No variables found matching "{variableSearchText}".</p>
+            <p class="empty-hint">Try a different search term or clear the search.</p>
+          </div>
         {:else}
           <div class="variables-list">
-            {#each variables as variable, index}
+            {#each filteredVariables as variable, filteredIndex}
+              {@const originalIndex = variables.findIndex(v => v === variable)}
               <div class="variable-item">
                 <div class="variable-inputs">
                   <input 
                     type="text" 
                     placeholder="Variable name"
                     bind:value={variable.key}
-                    on:input={(e) => updateVariable(index, 'key', e.target.value)}
+                    on:input={(e) => updateVariable(originalIndex, 'key', e.target.value)}
                     class="variable-key"
                   />
                   <input 
                     type="text" 
                     placeholder="Value"
                     bind:value={variable.value}
-                    on:input={(e) => updateVariable(index, 'value', e.target.value)}
+                    on:input={(e) => updateVariable(originalIndex, 'value', e.target.value)}
                     class="variable-value"
                   />
                 </div>
@@ -1562,7 +1620,7 @@
                   {/if}
                   <button 
                     class="variable-delete-btn" 
-                    on:click={() => removeVariable(index)}
+                    on:click={() => removeVariable(originalIndex)}
                     title="Delete variable"
                   >
                     🗑️ Delete
@@ -2765,6 +2823,69 @@
   }
 
   .clear-search:hover {
+    background: var(--bg-accent);
+    color: var(--text-primary);
+  }
+
+  /* Variables Search Filter Styling */
+  .variables-search-section {
+    margin-bottom: 0.75rem;
+  }
+
+  .variables-search-filter {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    position: relative;
+    padding: 0.5rem;
+    background: var(--bg-accent);
+    border-radius: 6px;
+    border: 1px solid var(--border-primary);
+  }
+
+  .variables-search-filter label {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    white-space: nowrap;
+  }
+
+  .variable-search-input {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-primary);
+    border-radius: 4px;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    transition: all 0.2s ease;
+    flex: 1;
+    min-width: 200px;
+  }
+
+  .variable-search-input:hover {
+    border-color: var(--border-accent);
+  }
+
+  .variable-search-input:focus {
+    outline: none;
+    border-color: var(--border-accent);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+  }
+
+  .clear-variable-search {
+    position: absolute;
+    right: 0.5rem;
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 0.875rem;
+    padding: 0.125rem;
+    border-radius: 2px;
+    transition: all 0.2s ease;
+  }
+
+  .clear-variable-search:hover {
     background: var(--bg-accent);
     color: var(--text-primary);
   }
