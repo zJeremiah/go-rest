@@ -6,6 +6,7 @@
 *.dylib
 gorest
 gorest.exe
+go-rest
 api-tester
 
 # Go test files

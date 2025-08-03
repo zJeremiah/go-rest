@@ -13,17 +13,22 @@ A modern, lightweight REST API testing tool built with Go and Svelte. Test your 
 
 ### Advanced Features
 - **Request Grouping** - Organize requests into logical groups
-- **Auto-save** - Automatic saving of request changes with manual save option
+- **Search & Filter** - Search requests by name or URL, filter by groups
+- **Response Variables** - Reference data from previous requests using `{{ "Request Name".json_key }}` syntax
+- **Auto-save** - Automatic saving of request changes with immediate parameter saving
 - **Request History** - View last response for each saved request
-- **Word Wrap** - Toggle word wrapping for better response readability
+- **Keyboard Shortcuts** - Send requests with `Cmd+Enter` (Mac) or `Ctrl+Enter` (Windows/Linux)
+- **Modal Previews** - Preview processed headers and body content in dedicated modals
 - **Request Duplication** - Quickly duplicate existing requests
-- **Request Renaming** - In-place editing of request names
+- **Request Renaming** - In-place editing of request names with unique name validation
 
 ### Developer Experience
-- **Modern UI** - Clean, responsive Svelte-based frontend
+- **Modern UI** - Clean, responsive Svelte-based frontend with dark theme support
+- **Smart Layout** - Optimized header bar with method, name, and URL input
 - **Real-time Updates** - Live request/response cycle with loading states
+- **Multiple Body Types** - Support for Text, JSON, and Form URL Encoded data
 - **Error Handling** - Comprehensive error messages and status indicators
-- **Data Persistence** - All data stored locally in JSON format
+- **Data Persistence** - All data stored locally in JSON format with automatic migrations
 - **CORS Support** - Built-in CORS handling for cross-origin requests
 
 ## 📦 Installation
@@ -104,12 +109,36 @@ Environments allow you to switch between different sets of variables (e.g., dev 
    - Format: `{{variable_name}}`
    - Example: `{{host}}/api/users` where `host` might be `https://api.example.com`
 
+### Using Response Variables
+
+Access data from previous request responses to create dynamic request chains:
+
+1. **Basic Syntax**
+   - Format: `{{ "Request Name".json_key }}`
+   - Example: `{{ "Auth".access_token }}` extracts `access_token` from the "Auth" request response
+
+2. **Use Cases**
+   - Authentication tokens: `{{ "Login".token }}`
+   - Dynamic IDs: `{{ "Create User".user_id }}`
+   - Nested data: `{{ "User Profile".data.email }}`
+
+3. **Request Names**
+   - Must be case-sensitive exact matches
+   - Use quotes to handle names with spaces
+   - Names must be unique across all requests
+
 ### Request Organization
 
 - **Groups**: Organize requests into logical groups (Authentication, Users, Orders, etc.)
 - **Collections**: All requests are automatically saved to your collection
-- **Search**: Use the search bar to quickly find requests
+- **Search**: Use the search bar to quickly find requests by name or URL
 - **Filtering**: Filter requests by group using the group dropdown
+- **Combined Filtering**: Use group filter and search together for precise request finding
+
+### Keyboard Shortcuts
+
+- **Send Request**: `Cmd+Enter` (Mac) or `Ctrl+Enter` (Windows/Linux)
+- **Quick Navigation**: Use search to jump to specific requests
 
 ## 🔧 Configuration
 
@@ -122,11 +151,11 @@ The application supports the following environment variables:
 ### Data Storage
 
 All data is stored locally in `saved_requests.json` in the project root. This file contains:
-- Request definitions
-- Response history
-- Environment configurations
-- Group definitions
-- Application settings
+- Request definitions with separate body types (Text, JSON, Form URL Encoded)
+- Response history for response variable references
+- Environment configurations with template variables
+- Group definitions for request organization
+- Application settings and UI preferences
 
 **Note**: Add `saved_requests.json` to your `.gitignore` if it contains sensitive data.
 
