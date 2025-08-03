@@ -1338,6 +1338,51 @@
         </div>
       </div>
       
+      <!-- Environment Management Section (Always Visible) -->
+      <div class="environment-section">
+        <div class="environment-header">
+          <h3>🌍 Environment</h3>
+          <div class="environment-actions">
+            <button 
+              class="btn-env btn-create" 
+              on:click={() => showCreateEnvironmentModal = true}
+              title="Create new environment"
+            >
+              ➕ New
+            </button>
+            {#if environments.length > 1}
+              <button 
+                class="btn-env btn-copy" 
+                on:click={() => showCopyEnvironmentModal = true}
+                title="Copy variables between environments"
+              >
+                📋 Copy
+              </button>
+              <button 
+                class="btn-env btn-delete" 
+                on:click={() => handleDeleteCurrentEnvironment()}
+                title="Delete current environment"
+              >
+                🗑️ Delete
+              </button>
+            {/if}
+          </div>
+        </div>
+        
+        <div class="environment-selector">
+          <label for="env-select">Active Environment:</label>
+          <select 
+            id="env-select"
+            bind:value={currentEnvironment}
+            on:change={(e) => activateEnvironment(e.target.value)}
+          >
+            {#each environments as env}
+              <option value={env.id}>{env.name}</option>
+            {/each}
+          </select>
+        </div>
+      </div>
+      
       <!-- Collection Tabs -->
       <div class="collection-tabs">
         <button 
@@ -1371,51 +1416,6 @@
           <button class="btn-add" on:click={handleCreateGroup} title="Create new group">
             📁 New Group
           </button>
-        </div>
-
-        <!-- Environment Management Section -->
-        <div class="environment-section">
-          <div class="environment-header">
-            <h3>🌍 Environment</h3>
-            <div class="environment-actions">
-              <button 
-                class="btn-env btn-create" 
-                on:click={() => showCreateEnvironmentModal = true}
-                title="Create new environment"
-              >
-                ➕ New
-              </button>
-              {#if environments.length > 1}
-                <button 
-                  class="btn-env btn-copy" 
-                  on:click={() => showCopyEnvironmentModal = true}
-                  title="Copy variables between environments"
-                >
-                  📋 Copy
-                </button>
-                <button 
-                  class="btn-env btn-delete" 
-                  on:click={() => handleDeleteCurrentEnvironment()}
-                  title="Delete current environment"
-                >
-                  🗑️ Delete
-                </button>
-              {/if}
-            </div>
-          </div>
-          
-          <div class="environment-selector">
-            <label for="env-select">Active Environment:</label>
-            <select 
-              id="env-select"
-              bind:value={currentEnvironment}
-              on:change={(e) => activateEnvironment(e.target.value)}
-            >
-              {#each environments as env}
-                <option value={env.id}>{env.name}</option>
-              {/each}
-            </select>
-          </div>
         </div>
 
         <!-- Group Filter Section -->
@@ -2921,33 +2921,7 @@
     gap: 0.5rem;
   }
 
-  /* Environment Section Styles */
-  .environment-section {
-    background: var(--bg-tertiary, #f8fafc);
-    border: 1px solid var(--border-primary, #e2e8f0);
-    border-radius: 8px;
-    padding: 1rem;
-    margin-bottom: 1rem;
-  }
 
-  .environment-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 0.75rem;
-  }
-
-  .environment-header h3 {
-    margin: 0;
-    font-size: 0.875rem;
-    font-weight: 600;
-    color: var(--text-primary);
-  }
-
-  .environment-actions {
-    display: flex;
-    gap: 0.5rem;
-  }
 
   .btn-env {
     background: var(--bg-primary, white);
