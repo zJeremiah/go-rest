@@ -332,6 +332,119 @@
     }
   }
 
+  function handleRequestAction(event, request) {
+    const action = event.target.value;
+    if (action === 'duplicate') {
+      duplicateRequest(request);
+    } else if (action === 'delete') {
+      deleteRequest(request);
+    }
+    // Reset the dropdown to the default option
+    event.target.value = '';
+  }
+
+  async function updateRequestName(request) {
+    if (!request.name || !request.name.trim()) {
+      return; // Don't save empty names
+    }
+    
+    try {
+      const res = await fetch('/api/requests/update', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: request.id,
+          name: request.name.trim()
+        })
+      });
+
+      if (res.ok) {
+        // Update the request in the local list
+        const updatedRequest = await res.json();
+        const index = savedRequests.findIndex(r => r.id === request.id);
+        if (index !== -1) {
+          savedRequests[index] = { ...savedRequests[index], ...updatedRequest };
+          savedRequests = [...savedRequests]; // Trigger reactivity
+        }
+      } else {
+        console.error('❌ Failed to update request name');
+      }
+    } catch (error) {
+      console.error('❌ Error updating request name:', error);
+    }
+  }
+
+  async function updateRequestGroup(request) {
+    try {
+      const res = await fetch('/api/requests/update', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: request.id,
+          group: request.group
+        })
+      });
+
+      if (res.ok) {
+        // Update the request in the local list
+        const updatedRequest = await res.json();
+        const index = savedRequests.findIndex(r => r.id === request.id);
+        if (index !== -1) {
+          savedRequests[index] = { ...savedRequests[index], ...updatedRequest };
+          savedRequests = [...savedRequests]; // Trigger reactivity
+        }
+        
+        // Refresh groups and filtered requests
+        loadGroups();
+        updateFilteredRequests();
+      } else {
+        console.error('❌ Failed to update request group');
+      }
+    } catch (error) {
+      console.error('❌ Error updating request group:', error);
+    }
+  }
+
+  // Generate tooltip text for a variable name
+  function getVariableTooltip(variableName, vars) {
+    if (!variableName || !vars) return '';
+    
+    const variable = vars.find(v => v.key === variableName.trim());
+    if (variable && variable.value !== undefined && variable.value !== '') {
+      return `${variableName}: ${variable.value}`;
+    } else {
+      return `${variableName}: undefined`;
+    }
+  }
+
+  // Check if a string contains variables and return tooltip info
+  function analyzeVariables(input, vars) {
+    if (!input || !vars) return { hasVariables: false, tooltip: '' };
+    
+    // Convert input to string if it's an object
+    const inputString = typeof input === 'string' ? input : 
+                       typeof input === 'object' && input !== null ? JSON.stringify(input) : 
+                       String(input);
+    
+    const variableMatches = inputString.match(/\{\{\s*([^}]+)\s*\}\}/g);
+    if (!variableMatches) return { hasVariables: false, tooltip: '' };
+    
+    const tooltips = variableMatches.map(match => {
+      const varName = match.replace(/[{}]/g, '').trim();
+      return getVariableTooltip(varName, vars);
+    });
+    
+    return {
+      hasVariables: true,
+      tooltip: tooltips.join(' | '),
+      variableCount: variableMatches.length
+    };
+  }
+
   async function startRenameRequest(request) {
     renamingRequestId = request.id;
     newRequestName = request.name || '';
@@ -1135,21 +1248,9 @@
                 >
                   <div class="request-header">
                     <span class="method-badge method-{request.method.toLowerCase()}">{request.method}</span>
-                    {#if renamingRequestId === request.id}
-                      <input 
-                        type="text" 
-                        bind:value={newRequestName}
-                        on:keydown={(e) => handleRenameKeydown(e, request)}
-                        on:blur={() => saveRename(request)}
-                        on:click={(e) => e.stopPropagation()}
-                        class="rename-input"
-                        use:focusOnMount
-                      />
-                    {:else}
-                      <span class="request-name">{request.name}</span>
-                    {/if}
+                    <span class="request-name">{request.name}</span>
                   </div>
-                  <div class="request-url">{request.url}</div>
+                  <div class="request-url" title={request.url}>{request.url}</div>
                   {#if request.lastResponse}
                     <div class="last-response">
                       <span class="status-badge status-{Math.floor(request.lastResponse.statusCode / 100)}xx">
@@ -1169,27 +1270,15 @@
                 </div>
         
                 <div class="request-actions">
-                  <button 
-                    class="action-btn rename-btn" 
-                    on:click={(e) => { e.stopPropagation(); startRenameRequest(request); }}
-                    title="Rename request"
+                  <select 
+                    class="request-action-dropdown"
+                    on:change={(e) => handleRequestAction(e, request)}
+                    on:click={(e) => e.stopPropagation()}
                   >
-                    ✏️
-                  </button>
-                  <button 
-                    class="action-btn duplicate-btn" 
-                    on:click={(e) => { e.stopPropagation(); duplicateRequest(request); }}
-                    title="Duplicate request"
-                  >
-                    📋
-                  </button>
-                  <button 
-                    class="action-btn delete-btn" 
-                    on:click={(e) => { e.stopPropagation(); deleteRequest(request); }}
-                    title="Delete request"
-                  >
-                    🗑️
-                  </button>
+                    <option value="">⚙️</option>
+                    <option value="duplicate">📋 Duplicate</option>
+                    <option value="delete">🗑️ Delete</option>
+                  </select>
                 </div>
               </div>
             {/each}
@@ -1263,31 +1352,99 @@
     aria-label="Resize collection panel"
   ></button>
   
-  <!-- Request Section -->
-  <div class="request-section" style="width: {requestWidth}px;">
-    <RequestForm 
-      bind:this={requestFormRef}
-      on:submit={(e) => handleRequest(e.detail)} 
-      on:save={(e) => saveRequest(e.detail)}
-      {loading} 
-      {selectedRequest}
-      {variables}
-      {groups}
-      canSend={!!selectedRequest}
-    />
-  </div>
-  
-  <!-- Resize Handle 2 -->
-  <button 
-    class="resize-handle" 
-    class:resizing={isResizing && resizeType === 'request'}
-    on:mousedown={(e) => startResize(e, 'request')}
-    aria-label="Resize request panel"
-  ></button>
-  
-  <!-- Response Section -->
-  <div class="response-section">
-    <ResponseDisplay {response} {loading} {wordWrap} on:wordWrapChange={handleWordWrapChange} />
+  <!-- Main Content Area (everything to the right of collection) -->
+  <div class="main-content-area">
+    <!-- Request Header Bar -->
+    <div class="request-header-section">
+      {#if selectedRequest}
+        <div class="request-header-bar">
+          <div class="request-info">
+            <input 
+              type="text" 
+              class="request-name-input" 
+              bind:value={selectedRequest.name}
+              on:blur={() => updateRequestName(selectedRequest)}
+              placeholder="Request name"
+            />
+            <select 
+              class="group-select" 
+              bind:value={selectedRequest.group}
+              on:change={() => updateRequestGroup(selectedRequest)}
+            >
+              {#each groups as group}
+                <option value={group.name}>{group.name}</option>
+              {/each}
+            </select>
+          </div>
+          <div class="request-controls">
+            <select class="method-select" bind:value={selectedRequest.method}>
+              <option value="GET">GET</option>
+              <option value="POST">POST</option>
+              <option value="PUT">PUT</option>
+              <option value="DELETE">DELETE</option>
+              <option value="PATCH">PATCH</option>
+              <option value="HEAD">HEAD</option>
+              <option value="OPTIONS">OPTIONS</option>
+            </select>
+            <input 
+              type="text" 
+              class="url-input"
+              class:has-variables={analyzeVariables(selectedRequest.url, variables).hasVariables}
+              bind:value={selectedRequest.url}
+              placeholder="https://api.example.com/endpoint"
+              title={analyzeVariables(selectedRequest.url, variables).hasVariables ? analyzeVariables(selectedRequest.url, variables).tooltip : ''}
+            />
+            <button 
+              type="button" 
+              class="btn-send" 
+              disabled={loading || !selectedRequest}
+              on:click={() => requestFormRef?.handleSubmit()}
+            >
+              {#if loading}
+                ⏳ Sending...
+              {:else}
+                🚀 Send
+              {/if}
+            </button>
+          </div>
+        </div>
+      {:else}
+        <div class="no-request-selected">
+          <p>Select a request from the collection to get started</p>
+        </div>
+      {/if}
+    </div>
+
+    <!-- Bottom Section: Request Options + Response -->
+    <div class="bottom-section">
+      <!-- Request Options Section -->
+      <div class="request-options-section" style="width: {requestWidth}px;">
+        <RequestForm 
+          bind:this={requestFormRef}
+          on:submit={(e) => handleRequest(e.detail)} 
+          on:save={(e) => saveRequest(e.detail)}
+          {loading} 
+          {selectedRequest}
+          {variables}
+          {groups}
+          canSend={!!selectedRequest}
+          hideBasicFields={true}
+        />
+      </div>
+      
+      <!-- Resize Handle 2 -->
+      <button 
+        class="resize-handle" 
+        class:resizing={isResizing && resizeType === 'request'}
+        on:mousedown={(e) => startResize(e, 'request')}
+        aria-label="Resize request panel"
+      ></button>
+      
+      <!-- Response Section -->
+      <div class="response-section">
+        <ResponseDisplay {response} {loading} {wordWrap} on:wordWrapChange={handleWordWrapChange} />
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1764,8 +1921,9 @@
     display: flex;
     flex-direction: column;
     gap: 0.25rem;
-    max-height: calc(100vh - 300px);
+    max-height: calc(100vh - 250px);
     overflow-y: auto;
+    padding-bottom: 2rem;
   }
 
   .request-item {
@@ -1775,7 +1933,7 @@
     transition: all 0.2s ease;
     display: flex;
     align-items: stretch;
-    overflow: hidden;
+    overflow: visible;
   }
 
   .request-item:hover {
@@ -1795,50 +1953,40 @@
     flex: 1;
     padding: 0.5rem;
     cursor: pointer;
+    min-width: 0; /* Allow flex item to shrink below content size */
+    overflow: hidden; /* Prevent content from expanding parent */
   }
 
   .request-actions {
     display: flex;
-    flex-direction: column;
-    background: rgba(255, 255, 255, 0.5);
-    border-left: 1px solid #e5e7eb;
-  }
-
-  .action-btn {
-    background: transparent;
-    border: none;
-    padding: 0.375rem;
-    cursor: pointer;
-    font-size: 0.75rem;
-    transition: all 0.2s ease;
-    display: flex;
     align-items: center;
     justify-content: center;
-    min-height: 28px;
-    min-width: 28px;
+    background: rgba(255, 255, 255, 0.5);
+    border-left: 1px solid #e5e7eb;
+    padding: 0.5rem;
   }
 
-  .action-btn:hover {
-    background: rgba(255, 255, 255, 0.8);
+  .request-action-dropdown {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-primary);
+    border-radius: 4px;
+    padding: 0.25rem;
+    font-size: 0.75rem;
+    cursor: pointer;
+    min-width: 40px;
+    text-align: center;
   }
 
-  .duplicate-btn:hover {
-    background: #fef3c7;
-    color: #d97706;
+  .request-action-dropdown:focus {
+    outline: none;
+    border-color: var(--border-accent);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
   }
 
-  .delete-btn {
-    border-top: 1px solid #e5e7eb;
-  }
-
-  .rename-btn:hover {
-    background: #fef3c7;
-    color: #d97706;
-  }
-
-  .delete-btn:hover {
-    background: #fee2e2;
-    color: #dc2626;
+  .request-action-dropdown:hover {
+    background: var(--bg-tertiary);
+    border-color: var(--border-secondary);
   }
 
   .request-header {
@@ -1900,6 +2048,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    max-width: 100%; /* Ensure it doesn't exceed parent width */
   }
 
   .last-response {
@@ -2485,5 +2634,233 @@
   :global([data-theme="dark"]) .btn-env:hover {
     background: var(--bg-primary);
     border-color: var(--border-accent);
+  }
+
+  /* Main Content Area - contains header + bottom sections */
+  .main-content-area {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* Bottom Section - contains request options + response side by side */
+  .bottom-section {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+  }
+
+  /* Request Header Section Styles */
+  .request-header-section {
+    background: var(--bg-primary);
+    border-bottom: 1px solid var(--border-primary);
+    padding: 1rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    width: 100%;
+    flex-shrink: 0;
+  }
+
+  .request-header-bar {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    max-width: 100%;
+  }
+
+  .request-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 300px;
+    flex-shrink: 0;
+  }
+
+  .request-name-input {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-primary);
+    border-radius: 4px;
+    padding: 0.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+    min-width: 150px;
+    flex: 1;
+  }
+
+  .request-name-input:focus {
+    outline: none;
+    border-color: var(--border-accent);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+  }
+
+  .group-select {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-primary);
+    border-radius: 4px;
+    padding: 0.5rem;
+    font-size: 0.875rem;
+    cursor: pointer;
+    min-width: 120px;
+  }
+
+  .group-select:focus {
+    outline: none;
+    border-color: var(--border-accent);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+  }
+
+  .request-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex: 1;
+  }
+
+  .method-select {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-primary);
+    border-radius: 4px;
+    padding: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    min-width: 100px;
+  }
+
+  .method-select:focus {
+    outline: none;
+    border-color: var(--border-accent);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+  }
+
+  .url-input {
+    flex: 1;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-primary);
+    border-radius: 4px;
+    padding: 0.5rem;
+    font-size: 0.875rem;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  }
+
+  .url-input:focus {
+    outline: none;
+    border-color: var(--border-accent);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+  }
+
+  .btn-send {
+    background: var(--button-primary);
+    color: white;
+    border: 1px solid var(--button-primary);
+    border-radius: 4px;
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+  }
+
+  .btn-send:hover:not(:disabled) {
+    background: var(--button-primary-hover);
+    border-color: var(--button-primary-hover);
+  }
+
+  .btn-send:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .no-request-selected {
+    text-align: center;
+    padding: 2rem;
+    color: var(--text-secondary);
+  }
+
+  /* Request Options Section */
+  .request-options-section {
+    background: var(--bg-primary);
+    overflow-y: auto;
+  }
+
+  /* Dark theme overrides for main content and request header */
+  :global([data-theme="dark"]) .main-content-area {
+    background: var(--bg-secondary);
+  }
+
+  :global([data-theme="dark"]) .request-header-section {
+    background: var(--bg-secondary);
+    border-color: var(--border-secondary);
+  }
+
+  :global([data-theme="dark"]) .request-name-input {
+    background: var(--bg-tertiary);
+    border-color: var(--border-secondary);
+  }
+
+  :global([data-theme="dark"]) .group-select {
+    background: var(--bg-tertiary);
+    border-color: var(--border-secondary);
+  }
+
+  :global([data-theme="dark"]) .method-select {
+    background: var(--bg-tertiary);
+    border-color: var(--border-secondary);
+  }
+
+  :global([data-theme="dark"]) .url-input {
+    background: var(--bg-tertiary);
+    border-color: var(--border-secondary);
+  }
+
+  :global([data-theme="dark"]) .request-options-section {
+    background: var(--bg-secondary);
+  }
+
+  :global([data-theme="dark"]) .request-action-dropdown {
+    background: var(--bg-tertiary);
+    border-color: var(--border-secondary);
+  }
+
+  :global([data-theme="dark"]) .request-actions {
+    background: rgba(0, 0, 0, 0.2);
+    border-color: var(--border-secondary);
+  }
+
+  /* Variable tooltip styling */
+  .has-variables {
+    position: relative;
+  }
+
+  .has-variables::after {
+    content: '';
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 6px;
+    height: 6px;
+    background: #3b82f6;
+    border-radius: 50%;
+    opacity: 0.7;
+  }
+
+  .has-variables:focus::after {
+    opacity: 1;
+    box-shadow: 0 0 4px #3b82f6;
+  }
+
+  /* Dark theme variable indicator */
+  :global([data-theme="dark"]) .has-variables::after {
+    background: #60a5fa;
+  }
+
+  :global([data-theme="dark"]) .has-variables:focus::after {
+    box-shadow: 0 0 4px #60a5fa;
   }
 </style>

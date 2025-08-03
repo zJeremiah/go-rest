@@ -36,6 +36,7 @@ type ProxyResponse struct {
 type SavedRequest struct {
 	ID           string            `json:"id"`
 	Name         string            `json:"name"`
+	SafeName     string            `json:"safe_name"`
 	URL          string            `json:"url"`
 	Method       string            `json:"method"`
 	Headers      map[string]string `json:"headers"`
@@ -188,7 +189,7 @@ func main() {
 	// Serve static files from frontend/dist directory
 	r.Handle("/*", http.FileServer(http.Dir("frontend/dist/")))
 
-	port := "8080"
+	port := "8333"
 	if p := os.Getenv("PORT"); p != "" {
 		port = p
 	}

@@ -7,12 +7,21 @@
   export let canSend = false;
   export let variables = []; // Add variables prop
   export let groups = []; // Groups for selection
+  export let hideBasicFields = false; // Hide method, URL, name when used in split layout
 
   let url = '';
   let method = 'GET';
   let headers = [{ key: 'Content-Type', value: 'application/json', enabled: true }];
   let body = '';
   let bodyType = 'text'; // 'text', 'json', 'form'
+
+  // Sync internal variables with selectedRequest when changed from header
+  $: if (selectedRequest && selectedRequest.url !== undefined && url !== selectedRequest.url) {
+    url = selectedRequest.url;
+  }
+  $: if (selectedRequest && selectedRequest.method !== undefined && method !== selectedRequest.method) {
+    method = selectedRequest.method;
+  }
   let jsonFields = [{ key: '', value: '', enabled: true }];
   let formFields = [{ key: '', value: '', enabled: true }];
   let description = '';
@@ -765,98 +774,127 @@
     };
   });
 
-  // Export function so parent can call it when switching requests
-  export { saveCurrentRequest };
+  // Export functions so parent can call them
+  export { saveCurrentRequest, handleSubmit };
 </script>
 
 <div class="card">
-  <h2 class="request-section-title">🔄 HTTP Request</h2>
-  
-  {#if selectedRequest && selectedRequest.name}
-    <div class="selected-request-header">
-      <div class="request-name-display">
-        <h3 class="request-name">{selectedRequest.name}</h3>
-        {#if selectedRequest.group && selectedRequest.group !== 'default'}
-          <span class="request-group">({selectedRequest.group})</span>
-        {/if}
+  {#if !hideBasicFields}
+    <h2 class="request-section-title">🔄 HTTP Request</h2>
+    
+    {#if selectedRequest && selectedRequest.name}
+      <div class="selected-request-header">
+        <div class="request-name-display">
+          <h3 class="request-name">{selectedRequest.name}</h3>
+          {#if selectedRequest.group && selectedRequest.group !== 'default'}
+            <span class="request-group">({selectedRequest.group})</span>
+          {/if}
+        </div>
       </div>
-    </div>
+    {/if}
+  {:else}
+    <h2 class="request-section-title">⚙️ Request Options</h2>
   {/if}
   
   <form on:submit|preventDefault={handleSubmit}>
-    <div class="form-group">
-      <div class="url-label-container">
-        <label for="url">URL *</label>
-        {#if saveStatus === 'pending'}
-          <span class="save-status pending">✏️ Changes pending...</span>
-        {:else if saveStatus === 'saving'}
-          <span class="save-status saving">💾 Saving...</span>
-        {:else if saveStatus === 'saved'}
-          <span class="save-status saved">✅ Saved</span>
-        {/if}
-      </div>
-      <input 
-        id="url"
-        type="text"
-        bind:value={url} 
-        on:blur={handleUrlBlur}
-        placeholder="https://api.example.com/endpoint or {'{'}{'{'}}host{'}'}{'}'}}/api/endpoint"
-        class="input {analyzeVariables(url, variables).hasVariables ? 'has-variables' : ''}"
-        title={analyzeVariables(url, variables).hasVariables ? analyzeVariables(url, variables).tooltip : ''}
-        required
-      />
-    </div>
-
-    <div class="form-group">
-      <label for="method">Method</label>
-      <select id="method" bind:value={method} on:blur={handleFieldBlur} class="select">
-        {#each methods as methodOption}
-          <option value={methodOption}>{methodOption}</option>
-        {/each}
-      </select>
-    </div>
-
-    {#if selectedRequest}
+    {#if !hideBasicFields}
       <div class="form-group">
-        <label for="group">Group</label>
-        <select id="group" bind:value={selectedRequest.group} on:change={handleGroupChange} class="select">
-          {#each groups as group}
-            <option value={group.name}>{group.name}</option>
+        <div class="url-label-container">
+          <label for="url">URL *</label>
+          {#if saveStatus === 'pending'}
+            <span class="save-status pending">✏️ Changes pending...</span>
+          {:else if saveStatus === 'saving'}
+            <span class="save-status saving">💾 Saving...</span>
+          {:else if saveStatus === 'saved'}
+            <span class="save-status saved">✅ Saved</span>
+          {/if}
+        </div>
+        <input 
+          id="url"
+          type="text"
+          bind:value={url} 
+          on:blur={handleUrlBlur}
+          placeholder="https://api.example.com/endpoint or {'{'}{'{'}}host{'}'}{'}'}}/api/endpoint"
+          class="input {analyzeVariables(url, variables).hasVariables ? 'has-variables' : ''}"
+          title={analyzeVariables(url, variables).hasVariables ? analyzeVariables(url, variables).tooltip : ''}
+          required
+        />
+      </div>
+
+      <div class="form-group">
+        <label for="method">Method</label>
+        <select id="method" bind:value={method} on:blur={handleFieldBlur} class="select">
+          {#each methods as methodOption}
+            <option value={methodOption}>{methodOption}</option>
           {/each}
         </select>
       </div>
+
+      {#if selectedRequest}
+        <div class="form-group">
+          <label for="group">Group</label>
+          <select id="group" bind:value={selectedRequest.group} on:change={handleGroupChange} class="select">
+            {#each groups as group}
+              <option value={group.name}>{group.name}</option>
+            {/each}
+          </select>
+        </div>
+      {/if}
     {/if}
 
-    <!-- Send Request Buttons - Moved to top for better UX -->
-    <div class="button-row">
-      <button 
-        type="button" 
-        class="btn btn-secondary" 
-        disabled={!canSend || !hasFormChanged()}
-        on:click={handleManualSave}
-        title="Save changes to this request"
-      >
-        {#if saveStatus === 'saving'}
-          💾 Saving...
-        {:else if saveStatus === 'saved'}
-          ✅ Saved
-        {:else if hasFormChanged()}
-          💾 Save Changes
-        {:else}
-          ✅ No Changes
-        {/if}
-      </button>
+    {#if !hideBasicFields}
+      <!-- Send Request Buttons - Moved to top for better UX -->
+      <div class="button-row">
+        <button 
+          type="button" 
+          class="btn btn-secondary" 
+          disabled={!canSend || !hasFormChanged()}
+          on:click={handleManualSave}
+          title="Save changes to this request"
+        >
+          {#if saveStatus === 'saving'}
+            💾 Saving...
+          {:else if saveStatus === 'saved'}
+            ✅ Saved
+          {:else if hasFormChanged()}
+            💾 Save Changes
+          {:else}
+            ✅ No Changes
+          {/if}
+        </button>
 
-      <button type="submit" class="btn btn-primary" disabled={loading || !canSend}>
-        {#if loading}
-          🔄 Sending...
-        {:else if !canSend}
-          📤 Select a Request First
-        {:else}
-          📤 Send Request
-        {/if}
-      </button>
-    </div>
+        <button type="submit" class="btn btn-primary" disabled={loading || !canSend}>
+          {#if loading}
+            🔄 Sending...
+          {:else if !canSend}
+            📤 Select a Request First
+          {:else}
+            📤 Send Request
+          {/if}
+        </button>
+      </div>
+    {:else}
+      <!-- Save button for options-only mode -->
+      <div class="button-row">
+        <button 
+          type="button" 
+          class="btn btn-secondary btn-full-width" 
+          disabled={!canSend || !hasFormChanged()}
+          on:click={handleManualSave}
+          title="Save changes to this request"
+        >
+          {#if saveStatus === 'saving'}
+            💾 Saving...
+          {:else if saveStatus === 'saved'}
+            ✅ Saved
+          {:else if hasFormChanged()}
+            💾 Save Changes
+          {:else}
+            ✅ No Changes
+          {/if}
+        </button>
+      </div>
+    {/if}
     
     {#if !canSend && !loading}
       <p class="send-hint">Select a request from the collection to enable sending</p>
@@ -1244,6 +1282,10 @@
     cursor: not-allowed;
     transform: none;
     box-shadow: none;
+  }
+
+  .btn-full-width {
+    width: 100%;
   }
 
 

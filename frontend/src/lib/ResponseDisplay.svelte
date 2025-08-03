@@ -794,6 +794,24 @@
     color: var(--text-primary);
   }
 
+  /* Dark theme overrides for response headers */
+  :global([data-theme="dark"]) .headers-grid {
+    background: var(--bg-secondary) !important;
+  }
+
+  :global([data-theme="dark"]) .header-item {
+    background: var(--bg-tertiary) !important;
+    border-color: var(--border-secondary) !important;
+  }
+
+  :global([data-theme="dark"]) .header-item strong {
+    color: var(--text-primary) !important;
+  }
+
+  :global([data-theme="dark"]) .header-item span {
+    color: var(--text-secondary) !important;
+  }
+
   :global([data-theme="dark"]) .response-body {
     background: var(--bg-primary);
     color: var(--text-primary);
