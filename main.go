@@ -40,6 +40,10 @@ type SavedRequest struct {
 	Method       string            `json:"method"`
 	Headers      map[string]string `json:"headers"`
 	Body         any               `json:"body"`
+	BodyType     string            `json:"bodyType,omitempty"`
+	BodyText     string            `json:"bodyText,omitempty"`
+	BodyJson     []BodyField       `json:"bodyJson,omitempty"`
+	BodyForm     []BodyField       `json:"bodyForm,omitempty"`
 	Params       []QueryParam      `json:"params"`
 	Group        string            `json:"group"`
 	Description  string            `json:"description"`
@@ -49,6 +53,12 @@ type SavedRequest struct {
 }
 
 type QueryParam struct {
+	Key     string `json:"key"`
+	Value   string `json:"value"`
+	Enabled bool   `json:"enabled"`
+}
+
+type BodyField struct {
 	Key     string `json:"key"`
 	Value   string `json:"value"`
 	Enabled bool   `json:"enabled"`
@@ -759,6 +769,10 @@ func handleSaveRequest(w http.ResponseWriter, r *http.Request) {
 		Method       string            `json:"method"`
 		Headers      map[string]string `json:"headers"`
 		Body         any               `json:"body"`
+		BodyType     string            `json:"bodyType,omitempty"`
+		BodyText     string            `json:"bodyText,omitempty"`
+		BodyJson     []BodyField       `json:"bodyJson,omitempty"`
+		BodyForm     []BodyField       `json:"bodyForm,omitempty"`
 		Params       []QueryParam      `json:"params"`
 		Group        string            `json:"group"`
 		Description  string            `json:"description"`
@@ -805,7 +819,11 @@ func handleSaveRequest(w http.ResponseWriter, r *http.Request) {
 		URL:          req.URL,
 		Method:       req.Method,
 		Headers:      req.Headers,
-		Body:         parseBodyAsJSON(req.Body),
+		Body:         parseBodyAsJSON(req.Body), // Set legacy body field only for new requests
+		BodyType:     req.BodyType,
+		BodyText:     req.BodyText,
+		BodyJson:     req.BodyJson,
+		BodyForm:     req.BodyForm,
 		Params:       req.Params,
 		Group:        req.Group,
 		Description:  req.Description,
@@ -846,6 +864,10 @@ func handleUpdateRequest(w http.ResponseWriter, r *http.Request) {
 		Method       string            `json:"method"`
 		Headers      map[string]string `json:"headers"`
 		Body         any               `json:"body"`
+		BodyType     string            `json:"bodyType,omitempty"`
+		BodyText     string            `json:"bodyText,omitempty"`
+		BodyJson     []BodyField       `json:"bodyJson,omitempty"`
+		BodyForm     []BodyField       `json:"bodyForm,omitempty"`
 		Params       []QueryParam      `json:"params"`
 		Group        string            `json:"group"`
 		Description  string            `json:"description"`
@@ -890,11 +912,16 @@ func handleUpdateRequest(w http.ResponseWriter, r *http.Request) {
 	found := false
 	for i, existing := range data.Requests {
 		if existing.ID == req.ID {
+			// Update all fields including separate body types
 			data.Requests[i].Name = req.Name
 			data.Requests[i].URL = req.URL
 			data.Requests[i].Method = req.Method
 			data.Requests[i].Headers = req.Headers
-			data.Requests[i].Body = parseBodyAsJSON(req.Body)
+			data.Requests[i].Body = parseBodyAsJSON(req.Body) // Update legacy body with active type
+			data.Requests[i].BodyType = req.BodyType
+			data.Requests[i].BodyText = req.BodyText
+			data.Requests[i].BodyJson = req.BodyJson
+			data.Requests[i].BodyForm = req.BodyForm
 			data.Requests[i].Params = req.Params
 			data.Requests[i].Group = req.Group
 			data.Requests[i].Description = req.Description
@@ -1042,6 +1069,10 @@ func handleDuplicateRequest(w http.ResponseWriter, r *http.Request) {
 		Method:       originalRequest.Method,
 		Headers:      make(map[string]string),
 		Body:         originalRequest.Body,
+		BodyType:     originalRequest.BodyType,
+		BodyText:     originalRequest.BodyText,
+		BodyJson:     make([]BodyField, len(originalRequest.BodyJson)),
+		BodyForm:     make([]BodyField, len(originalRequest.BodyForm)),
 		Params:       make([]QueryParam, len(originalRequest.Params)),
 		Group:        originalRequest.Group,
 		Description:  originalRequest.Description,
@@ -1057,6 +1088,10 @@ func handleDuplicateRequest(w http.ResponseWriter, r *http.Request) {
 
 	// Deep copy params
 	copy(duplicatedReq.Params, originalRequest.Params)
+
+	// Deep copy body fields
+	copy(duplicatedReq.BodyJson, originalRequest.BodyJson)
+	copy(duplicatedReq.BodyForm, originalRequest.BodyForm)
 
 	// Add to requests list
 	data.Requests = append(data.Requests, duplicatedReq)

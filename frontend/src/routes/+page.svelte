@@ -833,6 +833,10 @@
         method: request.method,
         headers: request.headers,
         body: request.body,
+        bodyType: request.bodyType,
+        bodyText: request.bodyText,
+        bodyJson: request.bodyJson,
+        bodyForm: request.bodyForm,
         params: request.params || [],
         description: request.description || ''
       }
@@ -1010,7 +1014,7 @@
           class:active={activeCollectionTab === 'variables'}
           on:click={() => activeCollectionTab = 'variables'}
         >
-          🔧 Environment Variables
+          🔧 Variables
           {#if variables.length > 0}
             <span class="tab-count">({variables.length})</span>
           {/if}
@@ -1026,6 +1030,51 @@
           <button class="btn-add" on:click={handleCreateGroup} title="Create new group">
             📁 New Group
           </button>
+        </div>
+
+        <!-- Environment Management Section -->
+        <div class="environment-section">
+          <div class="environment-header">
+            <h3>🌍 Environment</h3>
+            <div class="environment-actions">
+              <button 
+                class="btn-env btn-create" 
+                on:click={() => showCreateEnvironmentModal = true}
+                title="Create new environment"
+              >
+                ➕ New
+              </button>
+              {#if environments.length > 1}
+                <button 
+                  class="btn-env btn-copy" 
+                  on:click={() => showCopyEnvironmentModal = true}
+                  title="Copy variables between environments"
+                >
+                  📋 Copy
+                </button>
+                <button 
+                  class="btn-env btn-delete" 
+                  on:click={() => handleDeleteCurrentEnvironment()}
+                  title="Delete current environment"
+                >
+                  🗑️ Delete
+                </button>
+              {/if}
+            </div>
+          </div>
+          
+          <div class="environment-selector">
+            <label for="env-select">Active Environment:</label>
+            <select 
+              id="env-select"
+              bind:value={currentEnvironment}
+              on:change={(e) => activateEnvironment(e.target.value)}
+            >
+              {#each environments as env}
+                <option value={env.id}>{env.name}</option>
+              {/each}
+            </select>
+          </div>
         </div>
 
         <!-- Group Filter Section -->
@@ -1150,51 +1199,6 @@
 
       <!-- Variables Tab Content -->
       {#if activeCollectionTab === 'variables'}
-        <!-- Environment Management Section -->
-        <div class="environment-section">
-          <div class="environment-header">
-            <h3>🌍 Environment</h3>
-            <div class="environment-actions">
-              <button 
-                class="btn-env btn-create" 
-                on:click={() => showCreateEnvironmentModal = true}
-                title="Create new environment"
-              >
-                ➕ New
-              </button>
-              {#if environments.length > 1}
-                <button 
-                  class="btn-env btn-copy" 
-                  on:click={() => showCopyEnvironmentModal = true}
-                  title="Copy variables between environments"
-                >
-                  📋 Copy
-                </button>
-                <button 
-                  class="btn-env btn-delete" 
-                  on:click={() => handleDeleteCurrentEnvironment()}
-                  title="Delete current environment"
-                >
-                  🗑️ Delete
-                </button>
-              {/if}
-            </div>
-          </div>
-          
-          <div class="environment-selector">
-            <label for="env-select">Active Environment:</label>
-            <select 
-              id="env-select"
-              bind:value={currentEnvironment}
-              on:change={(e) => activateEnvironment(e.target.value)}
-            >
-              {#each environments as env}
-                <option value={env.id}>{env.name}</option>
-              {/each}
-            </select>
-          </div>
-        </div>
-
         <!-- Variables Section -->
         <div class="variables-section">
           <div class="variables-header">
@@ -2351,5 +2355,135 @@
     margin-bottom: 1rem;
     padding: 0 0.5rem;
     gap: 0.5rem;
+  }
+
+  /* Environment Section Styles */
+  .environment-section {
+    background: var(--bg-tertiary, #f8fafc);
+    border: 1px solid var(--border-primary, #e2e8f0);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .environment-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+  }
+
+  .environment-header h3 {
+    margin: 0;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .environment-actions {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .btn-env {
+    background: var(--bg-primary, white);
+    color: var(--text-primary);
+    border: 1px solid var(--border-primary, #d1d5db);
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+  }
+
+  .btn-env:hover {
+    background: var(--bg-secondary, #f9fafb);
+    border-color: var(--border-accent, #667eea);
+  }
+
+  .btn-create {
+    background: #ecfdf5;
+    color: #059669;
+    border-color: #a7f3d0;
+  }
+
+  .btn-create:hover {
+    background: #d1fae5;
+    border-color: #059669;
+  }
+
+  .btn-copy {
+    background: #eff6ff;
+    color: #2563eb;
+    border-color: #bfdbfe;
+  }
+
+  .btn-copy:hover {
+    background: #dbeafe;
+    border-color: #2563eb;
+  }
+
+  .btn-delete {
+    background: #fee2e2;
+    color: #dc2626;
+    border-color: #fecaca;
+  }
+
+  .btn-delete:hover {
+    background: #fecaca;
+    border-color: #dc2626;
+  }
+
+  .environment-selector {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .environment-selector label {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    white-space: nowrap;
+  }
+
+  .environment-selector select {
+    background: var(--bg-primary, white);
+    color: var(--text-primary);
+    border: 1px solid var(--border-primary, #d1d5db);
+    border-radius: 4px;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-width: 150px;
+  }
+
+  .environment-selector select:hover {
+    border-color: var(--border-accent, #667eea);
+  }
+
+  .environment-selector select:focus {
+    outline: none;
+    border-color: var(--border-accent, #667eea);
+    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+  }
+
+  /* Dark theme overrides for environment section */
+  :global([data-theme="dark"]) .environment-section {
+    background: var(--bg-secondary);
+    border-color: var(--border-secondary);
+  }
+
+  :global([data-theme="dark"]) .btn-env {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border-color: var(--border-secondary);
+  }
+
+  :global([data-theme="dark"]) .btn-env:hover {
+    background: var(--bg-primary);
+    border-color: var(--border-accent);
   }
 </style>

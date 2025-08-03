@@ -282,18 +282,10 @@
     }
   }
 
-  // Handle body type change
+  // Handle body type change - preserve template variables by using raw content
   function handleBodyTypeChange() {
-    const currentBodyContent = buildBodyContent();
-    
-    // Parse current content into the new format
-    if (bodyType === 'json') {
-      jsonFields = parseBodyContent(currentBodyContent, 'json');
-    } else if (bodyType === 'form') {
-      formFields = parseBodyContent(currentBodyContent, 'form');
-    } else {
-      body = currentBodyContent;
-    }
+    // Don't convert content between types - just preserve each type independently
+    // Each body type maintains its own content and we simply switch between them
     
     // Update Content-Type header based on body type
     const contentTypeIndex = headers.findIndex(h => h.key.toLowerCase() === 'content-type');
@@ -432,6 +424,7 @@
       JSON.stringify(currentHeaders) !== JSON.stringify(lastHeaders) ||
       normalizeContent(currentBodyContent) !== normalizeContent(lastBodyContent) ||
       bodyType !== lastSavedState.bodyType ||
+      body !== (lastSavedState.bodyText || '') ||
       JSON.stringify(currentJsonFields) !== JSON.stringify(lastJsonFields) ||
       JSON.stringify(currentFormFields) !== JSON.stringify(lastFormFields) ||
       JSON.stringify(currentParams) !== JSON.stringify(lastParams) ||
@@ -554,13 +547,16 @@
     saveStatus = 'saving';
 
     // Save the RAW URL that user typed, not the processed template URL
-    // Template processing should only happen during API requests, not when saving
-    const rawBodyContent = buildRawBodyContent();
+    // Save ALL body types independently - preserve each type's current content
     const requestData = {
       url: url.trim(), // Save raw URL with template variables intact
       method,
       headers: parsedHeaders,
-      body: rawBodyContent, // Save raw body with template variables intact
+      body: buildRawBodyContent(), // Update legacy body field with active body type for compatibility
+      bodyType: bodyType, // Save which body type is active
+      bodyText: body, // Always save current text body content
+      bodyJson: jsonFields.filter(f => f.key && f.key.trim()), // Always save current JSON fields
+      bodyForm: formFields.filter(f => f.key && f.key.trim()), // Always save current form fields
       params: params.filter(p => p.key && p.key.trim()),
       group: selectedRequest?.group || 'default',
       description: description.trim()
@@ -573,8 +569,9 @@
       url: url,
       method: method,
       headers: [...headers.filter(h => h.key && h.key.trim())],
-      bodyContent: rawBodyContent,
+      bodyContent: buildRawBodyContent(),
       bodyType: bodyType,
+      bodyText: body,
       jsonFields: [...jsonFields.filter(f => f.key && f.key.trim())],
       formFields: [...formFields.filter(f => f.key && f.key.trim())],
       params: [...params.filter(p => p.key && p.key.trim())],
@@ -632,58 +629,75 @@
     method = data.method || 'GET';
     description = data.description || '';
     
-    // Handle body content - convert objects to strings properly
-    let bodyContent = '';
-    if (data.body) {
-      if (typeof data.body === 'object' && data.body !== null) {
-        bodyContent = JSON.stringify(data.body, null, 2);
-        body = bodyContent;
-      } else {
-        bodyContent = String(data.body).trim();
-        body = data.body;
-      }
+    // Handle body content with separate storage for each type
+    if (data.bodyType && (data.bodyText !== undefined || data.bodyJson || data.bodyForm)) {
+      // New format: separate storage for each body type
+      bodyType = data.bodyType || 'text';
+      body = data.bodyText || '';
+      jsonFields = data.bodyJson && data.bodyJson.length > 0 ? data.bodyJson : [{ key: '', value: '', enabled: true }];
+      formFields = data.bodyForm && data.bodyForm.length > 0 ? data.bodyForm : [{ key: '', value: '', enabled: true }];
     } else {
-      body = '';
-    }
-    
-    // Detect body type and parse fields
-    if (bodyContent) {
-      // Try to detect if it's JSON
-      try {
-        const parsed = JSON.parse(bodyContent);
-        if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
-          bodyType = 'json';
-          jsonFields = Object.entries(parsed).map(([key, value]) => ({
-            key,
-            value: typeof value === 'string' ? value : JSON.stringify(value),
-            enabled: true
-          }));
+      // Legacy format: detect body type and parse from single body field
+      let bodyContent = '';
+      if (data.body) {
+        if (typeof data.body === 'object' && data.body !== null) {
+          bodyContent = JSON.stringify(data.body, null, 2);
+          body = bodyContent;
         } else {
-          bodyType = 'text';
+          bodyContent = String(data.body).trim();
+          body = data.body;
         }
-      } catch (e) {
-        // Try to detect if it's form URL encoded
+      } else {
+        body = '';
+      }
+      
+      // Detect body type and parse fields
+      if (bodyContent) {
+        // Try to detect if it's JSON
         try {
-          const params = new URLSearchParams(bodyContent);
-          const hasParams = Array.from(params.entries()).length > 0;
-          if (hasParams) {
-            bodyType = 'form';
-            formFields = Array.from(params.entries()).map(([key, value]) => ({
+          const parsed = JSON.parse(bodyContent);
+          if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+            bodyType = 'json';
+            jsonFields = Object.entries(parsed).map(([key, value]) => ({
               key,
-              value,
+              value: typeof value === 'string' ? value : JSON.stringify(value),
               enabled: true
             }));
+            formFields = [{ key: '', value: '', enabled: true }]; // Reset form fields
           } else {
             bodyType = 'text';
+            jsonFields = [{ key: '', value: '', enabled: true }]; // Reset JSON fields
+            formFields = [{ key: '', value: '', enabled: true }]; // Reset form fields
           }
         } catch (e) {
-          bodyType = 'text';
+          // Try to detect if it's form URL encoded
+          try {
+            const params = new URLSearchParams(bodyContent);
+            const hasParams = Array.from(params.entries()).length > 0;
+            if (hasParams) {
+              bodyType = 'form';
+              formFields = Array.from(params.entries()).map(([key, value]) => ({
+                key,
+                value,
+                enabled: true
+              }));
+              jsonFields = [{ key: '', value: '', enabled: true }]; // Reset JSON fields
+            } else {
+              bodyType = 'text';
+              jsonFields = [{ key: '', value: '', enabled: true }]; // Reset JSON fields
+              formFields = [{ key: '', value: '', enabled: true }]; // Reset form fields
+            }
+          } catch (e) {
+            bodyType = 'text';
+            jsonFields = [{ key: '', value: '', enabled: true }]; // Reset JSON fields
+            formFields = [{ key: '', value: '', enabled: true }]; // Reset form fields
+          }
         }
+      } else {
+        bodyType = 'text';
+        jsonFields = [{ key: '', value: '', enabled: true }];
+        formFields = [{ key: '', value: '', enabled: true }];
       }
-    } else {
-      bodyType = 'text';
-      jsonFields = [{ key: '', value: '', enabled: true }];
-      formFields = [{ key: '', value: '', enabled: true }];
     }
     
     // Handle headers - convert from object to array format
@@ -724,6 +738,7 @@
       headers: [...headers.filter(h => h.key && h.key.trim())],
       bodyContent: initialBodyContent,
       bodyType: bodyType,
+      bodyText: body,
       jsonFields: [...jsonFields.filter(f => f.key && f.key.trim())],
       formFields: [...formFields.filter(f => f.key && f.key.trim())],
       params: [...params.filter(p => p.key && p.key.trim())],
@@ -1006,9 +1021,8 @@
       </div>
     </div>
 
-    {#if method !== 'GET' && method !== 'HEAD'}
-      <div class="form-group">
-        <label for="body">Request Body</label>
+    <div class="form-group">
+      <label for="body">Request Body</label>
         
         <!-- Body Type Selector -->
         <div class="body-type-selector">
@@ -1118,7 +1132,6 @@
           </div>
         {/if}
       </div>
-    {/if}
 
     <div class="form-group">
       <label for="description">Description</label>
