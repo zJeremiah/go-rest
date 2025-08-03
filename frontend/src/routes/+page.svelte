@@ -108,6 +108,9 @@
     
     if (requestName && requestName.trim()) {
       try {
+        // Generate a unique name
+        const uniqueName = generateUniqueName(requestName.trim());
+        
         // Determine the group for the new request
         let targetGroup = 'default';
         if (selectedGroup !== 'all') {
@@ -118,7 +121,7 @@
         }
 
         const newRequestData = {
-          name: requestName.trim(),
+          name: uniqueName,
           url: 'https://api.example.com/endpoint',
           method: 'GET',
           headers: { 'Content-Type': 'application/json' },
@@ -348,6 +351,20 @@
       return; // Don't save empty names
     }
     
+    // Find the original request to compare names
+    const originalRequest = savedRequests.find(r => r.id === request.id);
+    if (!originalRequest) {
+      return; // Request not found
+    }
+    
+    // Validate and fix name for uniqueness
+    const validatedName = validateAndFixName(request, request.name);
+    
+    // Only proceed if the name actually changed
+    if (validatedName === originalRequest.name) {
+      return; // No change needed
+    }
+    
     try {
       const res = await fetch('/api/requests/update', {
         method: 'PUT',
@@ -356,7 +373,7 @@
         },
         body: JSON.stringify({
           id: request.id,
-          name: request.name.trim()
+          name: validatedName
         })
       });
 
@@ -365,7 +382,11 @@
         const updatedRequest = await res.json();
         const index = savedRequests.findIndex(r => r.id === request.id);
         if (index !== -1) {
+          // Update both the saved requests array and selectedRequest if it's the same request
           savedRequests[index] = { ...savedRequests[index], ...updatedRequest };
+          if (selectedRequest && selectedRequest.id === request.id) {
+            selectedRequest = { ...selectedRequest, ...updatedRequest };
+          }
           savedRequests = [...savedRequests]; // Trigger reactivity
         }
       } else {
@@ -422,8 +443,8 @@
   }
 
   // Check if a string contains variables and return tooltip info
-  function analyzeVariables(input, vars) {
-    if (!input || !vars) return { hasVariables: false, tooltip: '' };
+  function analyzeVariables(input, vars, requests = []) {
+    if (!input) return { hasVariables: false, tooltip: '' };
     
     // Convert input to string if it's an object
     const inputString = typeof input === 'string' ? input : 
@@ -434,8 +455,15 @@
     if (!variableMatches) return { hasVariables: false, tooltip: '' };
     
     const tooltips = variableMatches.map(match => {
-      const varName = match.replace(/[{}]/g, '').trim();
-      return getVariableTooltip(varName, vars);
+      const content = match.replace(/[{}]/g, '').trim();
+      
+      // Check if it's a response variable (starts with quote)
+      if (content.startsWith('"')) {
+        return getResponseVariableTooltip(content, requests);
+      } else {
+        // Regular environment variable
+        return getVariableTooltip(content, vars || []);
+      }
     });
     
     return {
@@ -443,6 +471,74 @@
       tooltip: tooltips.join(' | '),
       variableCount: variableMatches.length
     };
+  }
+
+  // Generate tooltip text for response variables
+  function getResponseVariableTooltip(content, requests = []) {
+    try {
+      // Parse: "RequestName".field
+      const quoteMatch = content.match(/^"([^"\\]*(?:\\.[^"\\]*)*)"\.(.+)$/);
+      if (!quoteMatch) {
+        return content + ': invalid response variable format';
+      }
+      
+      const requestName = quoteMatch[1].replace(/\\"/g, '"'); // Unescape quotes
+      const fieldPath = quoteMatch[2];
+      
+      // Try to find the request and get the field value
+      const request = requests.find(r => r.name === requestName);
+      if (!request) {
+        return `${requestName}.${fieldPath}: request not found`;
+      }
+      
+      if (!request.lastResponse) {
+        return `${requestName}.${fieldPath}: no response data`;
+      }
+      
+      // Extract the field value for preview
+      const value = extractFieldFromResponse(request.lastResponse.body, fieldPath);
+      const preview = value && value.length > 50 ? value.substring(0, 47) + '...' : value;
+      
+      return `${requestName}.${fieldPath}: ${preview || 'undefined'}`;
+    } catch (error) {
+      return content + ': error parsing response variable';
+    }
+  }
+
+  // Extract field from response body (client-side version)
+  function extractFieldFromResponse(responseBody, fieldPath) {
+    if (!responseBody) return '';
+    
+    // If requesting full response
+    if (fieldPath === 'response') {
+      if (typeof responseBody === 'string') {
+        return responseBody;
+      }
+      return JSON.stringify(responseBody);
+    }
+    
+    // Navigate JSON structure
+    let current = responseBody;
+    const parts = fieldPath.split('.');
+    
+    for (const part of parts) {
+      if (!part) continue;
+      
+      if (current && typeof current === 'object' && part in current) {
+        current = current[part];
+      } else {
+        return ''; // Field doesn't exist
+      }
+    }
+    
+    // Convert to string
+    if (typeof current === 'string') {
+      return current;
+    } else if (current === null || current === undefined) {
+      return '';
+    } else {
+      return JSON.stringify(current);
+    }
   }
 
   async function startRenameRequest(request) {
@@ -919,12 +1015,13 @@
     variables.saveTimeout = setTimeout(saveVariables, 1000);
   }
 
-  async function selectRequest(request) {
-
+  function selectRequest(request) {
+    // Avoid selecting the same request
+    if (selectedRequest?.id === request?.id) {
+      return;
+    }
     
-    // Don't auto-save when switching requests - this causes data corruption
-    // Users should manually save changes if needed
-    
+    // Just change the selected request - rely on auto-save for persistence
     selectedRequest = request;
     
     // Store selected request ID in localStorage for persistence
@@ -933,10 +1030,8 @@
     // Load the last response if it exists
     if (request.lastResponse) {
       response = request.lastResponse;
-
     } else {
       response = null;
-
     }
     
     // Dispatch custom event to populate the form
@@ -1067,6 +1162,42 @@
 
   // Load theme immediately to prevent FOUC
   loadSavedTheme();
+
+  // Helper functions for name uniqueness
+  function isNameUnique(name, excludeId = null) {
+    return !savedRequests.some(request => 
+      request.name.toLowerCase() === name.toLowerCase() && 
+      request.id !== excludeId
+    );
+  }
+
+  function generateUniqueName(baseName, excludeId = null) {
+    let uniqueName = baseName;
+    let counter = 1;
+    
+    while (!isNameUnique(uniqueName, excludeId)) {
+      uniqueName = `${baseName} (${counter})`;
+      counter++;
+    }
+    
+    return uniqueName;
+  }
+
+  function validateAndFixName(request, newName) {
+    const trimmedName = newName.trim();
+    
+    if (!trimmedName) {
+      // If empty, generate a unique name
+      return generateUniqueName('Untitled Request', request.id);
+    }
+    
+    if (isNameUnique(trimmedName, request.id)) {
+      return trimmedName;
+    } else {
+      // Name is duplicate, generate a unique version
+      return generateUniqueName(trimmedName, request.id);
+    }
+  }
 
   onMount(() => {
     
@@ -1389,10 +1520,10 @@
             <input 
               type="text" 
               class="url-input"
-              class:has-variables={analyzeVariables(selectedRequest.url, variables).hasVariables}
-              bind:value={selectedRequest.url}
-              placeholder="https://api.example.com/endpoint"
-              title={analyzeVariables(selectedRequest.url, variables).hasVariables ? analyzeVariables(selectedRequest.url, variables).tooltip : ''}
+                                      class:has-variables={analyzeVariables(selectedRequest.url, variables, savedRequests).hasVariables}
+                        bind:value={selectedRequest.url}
+                        placeholder="https://api.example.com/endpoint"
+                        title={analyzeVariables(selectedRequest.url, variables, savedRequests).hasVariables ? analyzeVariables(selectedRequest.url, variables, savedRequests).tooltip : ''}
             />
             <button 
               type="button" 
@@ -1427,6 +1558,7 @@
           {selectedRequest}
           {variables}
           {groups}
+          {savedRequests}
           canSend={!!selectedRequest}
           hideBasicFields={true}
         />

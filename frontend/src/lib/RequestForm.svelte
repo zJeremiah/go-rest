@@ -7,6 +7,7 @@
   export let canSend = false;
   export let variables = []; // Add variables prop
   export let groups = []; // Groups for selection
+  export let savedRequests = []; // Add savedRequests for response variable resolution
   export let hideBasicFields = false; // Hide method, URL, name when used in split layout
 
   let url = '';
@@ -70,30 +71,197 @@
   }
 
   let previewHeaders = {};
+  let showPreviewModal = false;
+  let previewModalType = ''; // 'headers', 'body'
+  let previewModalTitle = '';
+  let previewModalContent = {};
   
   function updateHeadersPreview() {
     previewHeaders = buildHeadersPreview();
   }
 
-  // Update headers preview when headers or variables change
-  $: if (headers || variables) updateHeadersPreview();
+  // Update headers preview when headers, variables, or savedRequests change
+  $: if (headers || variables || savedRequests) updateHeadersPreview();
 
-  // Process template variables in a string (frontend version)
+
+
+  // Build body with variable substitution for preview
+  function buildBodyPreview() {
+    if (bodyType === 'text') {
+      return processTemplate(body, variables);
+    } else if (bodyType === 'json') {
+      const processedFields = {};
+      jsonFields.filter(f => f.enabled && f.key && f.key.trim()).forEach(field => {
+        const processedKey = processTemplate(field.key.trim(), variables);
+        const processedValue = processTemplate(field.value || '', variables);
+        processedFields[processedKey] = processedValue;
+      });
+      return JSON.stringify(processedFields, null, 2);
+    } else if (bodyType === 'form') {
+      const processedForm = {};
+      formFields.filter(f => f.enabled && f.key && f.key.trim()).forEach(field => {
+        const processedKey = processTemplate(field.key.trim(), variables);
+        const processedValue = processTemplate(field.value || '', variables);
+        processedForm[processedKey] = processedValue;
+      });
+      return processedForm;
+    }
+    return '';
+  }
+
+  // Check if content has variables
+  function hasVariables(content) {
+    if (typeof content === 'string') {
+      return content.includes('{{') && content.includes('}}');
+    } else if (typeof content === 'object') {
+      return Object.values(content).some(value => 
+        typeof value === 'string' && value.includes('{{') && value.includes('}}')
+      );
+    }
+    return false;
+  }
+
+  // Open preview modal
+  function openPreviewModal(type) {
+    previewModalType = type;
+    
+    if (type === 'headers') {
+      previewModalTitle = 'Preview Headers';
+      previewModalContent = buildHeadersPreview();
+    } else if (type === 'body') {
+      previewModalTitle = 'Preview Request Body';
+      const bodyPreview = buildBodyPreview();
+      if (typeof bodyPreview === 'string') {
+        previewModalContent = { '_raw_': bodyPreview };
+      } else {
+        previewModalContent = bodyPreview;
+      }
+    }
+    
+    showPreviewModal = true;
+  }
+
+  // Close preview modal
+  function closePreviewModal() {
+    showPreviewModal = false;
+  }
+
+  // Process template variables in a string (frontend version with response variable support)
   function processTemplate(input, vars) {
-    if (!input || !vars) return input;
+    if (!input) return input;
     
     // Convert input to string if it's an object
     let result = typeof input === 'string' ? input : 
                  typeof input === 'object' && input !== null ? JSON.stringify(input) : 
                  String(input);
     
-    vars.forEach(variable => {
-      if (variable.key && variable.value !== undefined) {
-        const regex = new RegExp(`{{\\s*${variable.key}\\s*}}`, 'g');
-        result = result.replace(regex, variable.value);
+    // First, handle response variables
+    const responseVarPattern = /\{\{[^}]*\}\}/g;
+    const allMatches = result.match(responseVarPattern) || [];
+    
+    for (const match of allMatches) {
+      // Check if this looks like a response variable (contains quotes)
+      if (match.includes('"') || match.includes('\\"')) {
+        const resolvedValue = resolveResponseVariable(match);
+        if (resolvedValue !== null) {
+          result = result.replace(match, resolvedValue);
+        }
       }
-    });
+    }
+    
+    // Then handle regular environment variables
+    if (vars) {
+      vars.forEach(variable => {
+        if (variable.key && variable.value !== undefined) {
+          const regex = new RegExp(`{{\\s*${variable.key}\\s*}}`, 'g');
+          result = result.replace(regex, variable.value);
+        }
+      });
+    }
+    
     return result;
+  }
+
+  // Resolve response variables like {{"RequestName".field}} or {{\"RequestName\".field}}
+  function resolveResponseVariable(variable) {
+    try {
+      // Remove outer {{ and }}
+      const content = variable.slice(2, -2).trim();
+      
+      // Handle both escaped and unescaped quotes
+      let requestName, fieldPath;
+      
+      if (content.startsWith('\\"')) {
+        // Handle escaped quotes: {{\"RequestName\".field}}
+        const endIndex = content.indexOf('\\".', 2);
+        if (endIndex === -1) {
+          return null;
+        }
+        requestName = content.substring(2, endIndex);
+        fieldPath = content.substring(endIndex + 3);
+      } else if (content.startsWith('"')) {
+        // Handle regular quotes: {{"RequestName".field}}
+        const endIndex = content.indexOf('".', 1);
+        if (endIndex === -1) {
+          return null;
+        }
+        requestName = content.substring(1, endIndex);
+        fieldPath = content.substring(endIndex + 2);
+      } else {
+        return null; // Not a response variable
+      }
+      
+      // Find the request
+      const request = savedRequests.find(r => r.name === requestName);
+      if (!request) {
+        return ''; // Return empty string if request not found
+      }
+      
+      if (!request.lastResponse) {
+        return ''; // Return empty string if no response
+      }
+      
+      // Extract the field value
+      return extractFieldFromResponse(request.lastResponse.body, fieldPath);
+    } catch (error) {
+      return null;
+    }
+  }
+
+  // Extract field from response body (client-side version)
+  function extractFieldFromResponse(responseBody, fieldPath) {
+    if (!responseBody) return '';
+    
+    // If requesting full response
+    if (fieldPath === 'response') {
+      if (typeof responseBody === 'string') {
+        return responseBody;
+      }
+      return JSON.stringify(responseBody);
+    }
+    
+    // Navigate JSON structure
+    let current = responseBody;
+    const parts = fieldPath.split('.');
+    
+    for (const part of parts) {
+      if (!part) continue;
+      
+      if (current && typeof current === 'object' && part in current) {
+        current = current[part];
+      } else {
+        return ''; // Field doesn't exist
+      }
+    }
+    
+    // Convert to string
+    if (typeof current === 'string') {
+      return current;
+    } else if (current === null || current === undefined) {
+      return '';
+    } else {
+      return JSON.stringify(current);
+    }
   }
 
   // Generate tooltip text for a variable name
@@ -109,8 +277,8 @@
   }
 
   // Check if a string contains variables and return tooltip info
-  function analyzeVariables(input, vars) {
-    if (!input || !vars) return { hasVariables: false, tooltip: '' };
+  function analyzeVariables(input, vars, requests = []) {
+    if (!input) return { hasVariables: false, tooltip: '' };
     
     // Convert input to string if it's an object
     const inputString = typeof input === 'string' ? input : 
@@ -121,8 +289,15 @@
     if (!variableMatches) return { hasVariables: false, tooltip: '' };
     
     const tooltips = variableMatches.map(match => {
-      const varName = match.replace(/[{}]/g, '').trim();
-      return getVariableTooltip(varName, vars);
+      const content = match.replace(/[{}]/g, '').trim();
+      
+      // Check if it's a response variable (starts with quote)
+      if (content.startsWith('"')) {
+        return getResponseVariableTooltip(content, requests);
+      } else {
+        // Regular environment variable
+        return getVariableTooltip(content, vars || []);
+      }
     });
     
     return {
@@ -130,6 +305,38 @@
       tooltip: tooltips.join(' | '),
       variableCount: variableMatches.length
     };
+  }
+
+  // Generate tooltip text for response variables
+  function getResponseVariableTooltip(content, requests = []) {
+    try {
+      // Parse: "RequestName".field
+      const quoteMatch = content.match(/^"([^"\\]*(?:\\.[^"\\]*)*)"\.(.+)$/);
+      if (!quoteMatch) {
+        return content + ': invalid response variable format';
+      }
+      
+      const requestName = quoteMatch[1].replace(/\\"/g, '"'); // Unescape quotes
+      const fieldPath = quoteMatch[2];
+      
+      // Try to find the request and get the field value for preview
+      const request = requests.find(r => r.name === requestName);
+      if (!request) {
+        return `${requestName}.${fieldPath}: request not found`;
+      }
+      
+      if (!request.lastResponse) {
+        return `${requestName}.${fieldPath}: no response data`;
+      }
+      
+      // Extract the field value for preview
+      const value = extractFieldFromResponse(request.lastResponse.body, fieldPath);
+      const preview = value && value.length > 50 ? value.substring(0, 47) + '...' : value;
+      
+      return `${requestName}.${fieldPath}: ${preview || 'undefined'}`;
+    } catch (error) {
+      return content + ': error parsing response variable';
+    }
   }
 
   // Check if URL is valid or contains template variables
@@ -373,8 +580,8 @@
     previewUrl = buildUrlWithParams();
   }
 
-  // Initialize preview on component mount and when variables/URL change
-  $: if (url || variables) updatePreview();
+  // Initialize preview on component mount and when variables/URL/savedRequests change
+  $: if (url || variables || savedRequests) updatePreview();
 
   // Also update when params change
   $: if (params) updatePreview();
@@ -471,6 +678,15 @@
     }
   }
 
+  // Save immediately when parameter fields lose focus - no conditions, just save
+  function handleParamFieldBlur() {
+    if (selectedRequest) {
+      clearTimeout(urlSaveTimeout);
+      saveStatus = 'saving';
+      saveCurrentRequest();
+    }
+  }
+
   // Handle group change
   function handleGroupChange() {
     if (selectedRequest) {
@@ -538,10 +754,7 @@
 
   // Save current request data
   function saveCurrentRequest() {
-
-    
     if (!selectedRequest || !url.trim()) {
-
       return;
     }
     
@@ -815,8 +1028,8 @@
           bind:value={url} 
           on:blur={handleUrlBlur}
           placeholder="https://api.example.com/endpoint or {'{'}{'{'}}host{'}'}{'}'}}/api/endpoint"
-          class="input {analyzeVariables(url, variables).hasVariables ? 'has-variables' : ''}"
-          title={analyzeVariables(url, variables).hasVariables ? analyzeVariables(url, variables).tooltip : ''}
+                                class="input {analyzeVariables(url, variables, savedRequests).hasVariables ? 'has-variables' : ''}"
+                      title={analyzeVariables(url, variables, savedRequests).hasVariables ? analyzeVariables(url, variables, savedRequests).tooltip : ''}
           required
         />
       </div>
@@ -959,16 +1172,16 @@
                       bind:value={header.key}
                       on:blur={handleFieldBlur}
                       placeholder="Header Name"
-                      class="input header-input {analyzeVariables(header.key, variables).hasVariables ? 'has-variables' : ''}"
-                      title={analyzeVariables(header.key, variables).hasVariables ? analyzeVariables(header.key, variables).tooltip : ''}
+                                    class="input header-input {analyzeVariables(header.key, variables, savedRequests).hasVariables ? 'has-variables' : ''}"
+              title={analyzeVariables(header.key, variables, savedRequests).hasVariables ? analyzeVariables(header.key, variables, savedRequests).tooltip : ''}
                     />
                     <input 
                       type="text" 
                       bind:value={header.value}
                       on:blur={handleFieldBlur}
                       placeholder="Header Value"
-                      class="input header-input {analyzeVariables(header.value, variables).hasVariables ? 'has-variables' : ''}"
-                      title={analyzeVariables(header.value, variables).hasVariables ? analyzeVariables(header.value, variables).tooltip : ''}
+                                    class="input header-input {analyzeVariables(header.value, variables, savedRequests).hasVariables ? 'has-variables' : ''}"
+              title={analyzeVariables(header.value, variables, savedRequests).hasVariables ? analyzeVariables(header.value, variables, savedRequests).tooltip : ''}
                     />
                     <button 
                       type="button" 
@@ -982,25 +1195,17 @@
                 {/each}
               </div>
 
-              <!-- Headers Preview -->
-              {#if Object.keys(previewHeaders).length > 0}
-                <div class="headers-preview">
-                  <div class="preview-header">
-                    <span>Preview Headers:</span>
-                    {#if hasHeaderVariables()}
-                      <div class="preview-info">
-                        <small class="template-info">✨ Variables substituted</small>
-                      </div>
-                    {/if}
-                  </div>
-                  <div class="preview-content">
-                    {#each Object.entries(previewHeaders) as [key, value]}
-                      <div class="preview-header-row">
-                        <span class="preview-key">{key}:</span>
-                        <span class="preview-value">{value}</span>
-                      </div>
-                    {/each}
-                  </div>
+              <!-- Headers Preview Button -->
+              {#if Object.keys(previewHeaders).length > 0 && hasHeaderVariables()}
+                <div class="preview-button-container">
+                  <button 
+                    type="button" 
+                    class="btn-preview" 
+                    on:click={() => openPreviewModal('headers')}
+                    title="Preview headers with variables resolved"
+                  >
+                    👁️ Preview Headers
+                  </button>
                 </div>
               {/if}
             </div>
@@ -1020,24 +1225,27 @@
                       type="checkbox" 
                       bind:checked={param.enabled}
                       class="param-checkbox"
-                      on:change={updatePreview}
+                      on:change={(e) => {
+                        updatePreview();
+                        handleParamFieldBlur();
+                      }}
                     />
                     <input 
                       type="text" 
                       bind:value={param.key}
-                      on:blur={handleFieldBlur}
+                      on:blur={handleParamFieldBlur}
                       placeholder="Key"
-                      class="input param-input {analyzeVariables(param.key, variables).hasVariables ? 'has-variables' : ''}"
-                      title={analyzeVariables(param.key, variables).hasVariables ? analyzeVariables(param.key, variables).tooltip : ''}
+                                    class="input param-input {analyzeVariables(param.key, variables, savedRequests).hasVariables ? 'has-variables' : ''}"
+              title={analyzeVariables(param.key, variables, savedRequests).hasVariables ? analyzeVariables(param.key, variables, savedRequests).tooltip : ''}
                       on:input={updatePreview}
                     />
                     <input 
                       type="text" 
                       bind:value={param.value}
-                      on:blur={handleFieldBlur}
+                      on:blur={handleParamFieldBlur}
                       placeholder="Value"
-                      class="input param-input {analyzeVariables(param.value, variables).hasVariables ? 'has-variables' : ''}"
-                      title={analyzeVariables(param.value, variables).hasVariables ? analyzeVariables(param.value, variables).tooltip : ''}
+                                    class="input param-input {analyzeVariables(param.value, variables, savedRequests).hasVariables ? 'has-variables' : ''}"
+              title={analyzeVariables(param.value, variables, savedRequests).hasVariables ? analyzeVariables(param.value, variables, savedRequests).tooltip : ''}
                       on:input={updatePreview}
                     />
                     <button 
@@ -1051,8 +1259,6 @@
                   </div>
                 {/each}
               </div>
-
-
             </div>
           {/if}
         </div>
@@ -1084,10 +1290,24 @@
             bind:value={body} 
             on:blur={handleFieldBlur}
             placeholder="Raw text, JSON, XML, etc..."
-            class="textarea {analyzeVariables(body, variables).hasVariables ? 'has-variables' : ''}"
-            title={analyzeVariables(body, variables).hasVariables ? analyzeVariables(body, variables).tooltip : ''}
+            class="textarea {analyzeVariables(body, variables, savedRequests).hasVariables ? 'has-variables' : ''}"
+            title={analyzeVariables(body, variables, savedRequests).hasVariables ? analyzeVariables(body, variables, savedRequests).tooltip : ''}
             rows="6"
           ></textarea>
+          
+          <!-- Text Body Preview Button -->
+          {#if body && hasVariables(body)}
+            <div class="preview-button-container">
+              <button 
+                type="button" 
+                class="btn-preview" 
+                on:click={() => openPreviewModal('body')}
+                title="Preview request body with variables resolved"
+              >
+                👁️ Preview Body
+              </button>
+            </div>
+          {/if}
         {/if}
 
         <!-- JSON Body -->
@@ -1104,15 +1324,15 @@
                   type="text" 
                   bind:value={field.key}
                   placeholder="Key"
-                  class="field-input field-key {analyzeVariables(field.key, variables).hasVariables ? 'has-variables' : ''}"
-                  title={analyzeVariables(field.key, variables).hasVariables ? analyzeVariables(field.key, variables).tooltip : ''}
+                  class="field-input field-key {analyzeVariables(field.key, variables, savedRequests).hasVariables ? 'has-variables' : ''}"
+                  title={analyzeVariables(field.key, variables, savedRequests).hasVariables ? analyzeVariables(field.key, variables, savedRequests).tooltip : ''}
                 />
                 <input 
                   type="text" 
                   bind:value={field.value}
                   placeholder="Value"
-                  class="field-input field-value {analyzeVariables(field.value, variables).hasVariables ? 'has-variables' : ''}"
-                  title={analyzeVariables(field.value, variables).hasVariables ? analyzeVariables(field.value, variables).tooltip : ''}
+                  class="field-input field-value {analyzeVariables(field.value, variables, savedRequests).hasVariables ? 'has-variables' : ''}"
+                  title={analyzeVariables(field.value, variables, savedRequests).hasVariables ? analyzeVariables(field.value, variables, savedRequests).tooltip : ''}
                 />
                 <button 
                   type="button" 
@@ -1128,6 +1348,20 @@
               + Add JSON Field
             </button>
           </div>
+          
+          <!-- JSON Body Preview Button -->
+          {#if jsonFields.some(f => f.enabled && (hasVariables(f.key) || hasVariables(f.value)))}
+            <div class="preview-button-container">
+              <button 
+                type="button" 
+                class="btn-preview" 
+                on:click={() => openPreviewModal('body')}
+                title="Preview JSON body with variables resolved"
+              >
+                👁️ Preview Body
+              </button>
+            </div>
+          {/if}
         {/if}
 
         <!-- Form URL Encoded Body -->
@@ -1144,15 +1378,15 @@
                   type="text" 
                   bind:value={field.key}
                   placeholder="Key"
-                  class="field-input field-key {analyzeVariables(field.key, variables).hasVariables ? 'has-variables' : ''}"
-                  title={analyzeVariables(field.key, variables).hasVariables ? analyzeVariables(field.key, variables).tooltip : ''}
+                  class="field-input field-key {analyzeVariables(field.key, variables, savedRequests).hasVariables ? 'has-variables' : ''}"
+                  title={analyzeVariables(field.key, variables, savedRequests).hasVariables ? analyzeVariables(field.key, variables, savedRequests).tooltip : ''}
                 />
                 <input 
                   type="text" 
                   bind:value={field.value}
                   placeholder="Value"
-                  class="field-input field-value {analyzeVariables(field.value, variables).hasVariables ? 'has-variables' : ''}"
-                  title={analyzeVariables(field.value, variables).hasVariables ? analyzeVariables(field.value, variables).tooltip : ''}
+                  class="field-input field-value {analyzeVariables(field.value, variables, savedRequests).hasVariables ? 'has-variables' : ''}"
+                  title={analyzeVariables(field.value, variables, savedRequests).hasVariables ? analyzeVariables(field.value, variables, savedRequests).tooltip : ''}
                 />
                 <button 
                   type="button" 
@@ -1168,6 +1402,20 @@
               + Add Form Field
             </button>
           </div>
+          
+          <!-- Form Body Preview Button -->
+          {#if formFields.some(f => f.enabled && (hasVariables(f.key) || hasVariables(f.value)))}
+            <div class="preview-button-container">
+              <button 
+                type="button" 
+                class="btn-preview" 
+                on:click={() => openPreviewModal('body')}
+                title="Preview form body with variables resolved"
+              >
+                👁️ Preview Body
+              </button>
+            </div>
+          {/if}
         {/if}
       </div>
 
@@ -1178,14 +1426,70 @@
         bind:value={description} 
         on:blur={handleFieldBlur}
         placeholder="Add a description for this request..."
-        class="textarea description-textarea {analyzeVariables(description, variables).hasVariables ? 'has-variables' : ''}"
-        title={analyzeVariables(description, variables).hasVariables ? analyzeVariables(description, variables).tooltip : ''}
+        class="textarea description-textarea {analyzeVariables(description, variables, savedRequests).hasVariables ? 'has-variables' : ''}"
+        title={analyzeVariables(description, variables, savedRequests).hasVariables ? analyzeVariables(description, variables, savedRequests).tooltip : ''}
         rows="3"
       ></textarea>
     </div>
 
   </form>
 </div>
+
+<!-- Preview Modal -->
+{#if showPreviewModal}
+  <!-- svelte-ignore a11y-click-events-have-key-events -->
+  <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
+  <div class="modal-overlay" role="dialog" aria-modal="true" on:click={closePreviewModal} on:keydown={(e) => e.key === 'Escape' && closePreviewModal()}>
+    <!-- svelte-ignore a11y-click-events-have-key-events -->
+    <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
+    <div class="modal-content" role="document" on:click={(e) => e.stopPropagation()}>
+      <div class="modal-header">
+        <h3>{previewModalTitle}</h3>
+        <button type="button" class="modal-close" on:click={closePreviewModal}>✕</button>
+      </div>
+      
+      <div class="modal-body">
+        {#if previewModalType === 'body' && previewModalContent._raw_}
+          <!-- Raw text body -->
+          <pre class="preview-text">{previewModalContent._raw_}</pre>
+        {:else if Object.keys(previewModalContent).length > 0}
+          <!-- Key-value pairs for headers, params, or structured body -->
+          <div class="preview-content">
+            {#each Object.entries(previewModalContent) as [key, value]}
+              <div class="preview-row">
+                <span class="preview-key">{key}:</span>
+                <span class="preview-value">{value}</span>
+              </div>
+            {/each}
+          </div>
+        {:else}
+          <p class="preview-empty">No content to preview</p>
+        {/if}
+      </div>
+      
+      <div class="modal-footer">
+        <button type="button" class="btn-secondary" on:click={closePreviewModal}>Close</button>
+        <button 
+          type="button" 
+          class="btn-primary" 
+          on:click={() => {
+            if (previewModalType === 'body' && previewModalContent._raw_) {
+              navigator.clipboard.writeText(previewModalContent._raw_);
+            } else {
+              const text = Object.entries(previewModalContent)
+                .map(([key, value]) => `${key}: ${value}`)
+                .join('\n');
+              navigator.clipboard.writeText(text);
+            }
+          }}
+          title="Copy to clipboard"
+        >
+          📋 Copy
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 <style>
   h2 {
@@ -1392,65 +1696,7 @@
     font-size: 0.8rem;
   }
 
-  /* Headers Preview Styles */
-  .headers-preview {
-    margin-top: 1rem;
-    padding: 1rem;
-    background: var(--preview-bg, #f0f9ff);
-    border: 1px solid var(--preview-border, #bae6fd);
-    border-radius: 6px;
-  }
 
-  .preview-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 0.75rem;
-  }
-
-  .preview-header span {
-    font-weight: 500;
-    color: var(--preview-text, #0369a1);
-    font-size: 0.75rem;
-  }
-
-  .preview-info {
-    display: flex;
-    align-items: center;
-  }
-
-  .preview-content {
-    background: var(--bg-primary, white);
-    border: 1px solid var(--preview-border, #bae6fd);
-    border-radius: 4px;
-    padding: 0.75rem;
-    max-height: 200px;
-    overflow-y: auto;
-  }
-
-  .preview-header-row {
-    display: flex;
-    margin-bottom: 0.5rem;
-    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-    font-size: 0.75rem;
-  }
-
-  .preview-header-row:last-child {
-    margin-bottom: 0;
-  }
-
-  .preview-key {
-    color: #1e40af;
-    font-weight: 600;
-    min-width: 140px;
-    margin-right: 0.5rem;
-  }
-
-  .preview-value {
-    color: #059669;
-    word-break: break-all;
-    flex: 1;
-  }
 
   /* Params Styles */
   .params-header {
@@ -1653,15 +1899,10 @@
     background: #94a3b8;
   }
 
-  /* Enable text selection for URL preview and preview headers */
+  /* Enable text selection for URL preview */
   .preview-text-top,
   .url-preview-top,
-  .url-preview-top *,
-  .preview-content,
-  .preview-header-row,
-  .preview-header-row *,
-  .preview-key,
-  .preview-value {
+  .url-preview-top * {
     user-select: text !important;
     -webkit-user-select: text !important;
     -moz-user-select: text !important;
@@ -1996,5 +2237,261 @@
 
   :global([data-theme="dark"]) .request-group {
     color: var(--text-secondary);
+  }
+
+  /* Preview Button Styles */
+  .preview-button-container {
+    margin-top: 1rem;
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .btn-preview {
+    background: var(--button-secondary, #f3f4f6);
+    color: var(--text-primary, #374151);
+    border: 1px solid var(--border-primary, #d1d5db);
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.2s ease;
+  }
+
+  .btn-preview:hover {
+    background: var(--button-secondary-hover, #e5e7eb);
+    border-color: var(--border-accent, #667eea);
+  }
+
+  :global([data-theme="dark"]) .btn-preview {
+    background: var(--button-secondary);
+    color: var(--text-primary);
+    border-color: var(--border-secondary);
+  }
+
+  :global([data-theme="dark"]) .btn-preview:hover {
+    background: var(--button-secondary-hover);
+    border-color: var(--border-accent);
+  }
+
+  /* Modal Styles */
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(2px);
+  }
+
+  .modal-content {
+    background: var(--bg-primary, white);
+    border-radius: 8px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    max-width: 90vw;
+    max-height: 90vh;
+    width: 600px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.5rem;
+    border-bottom: 1px solid var(--border-secondary, #e5e7eb);
+  }
+
+  .modal-header h3 {
+    margin: 0;
+    color: var(--text-primary, #374151);
+    font-size: 1.25rem;
+    font-weight: 600;
+  }
+
+  .modal-close {
+    background: none;
+    border: none;
+    font-size: 1.25rem;
+    cursor: pointer;
+    color: var(--text-secondary, #6b7280);
+    padding: 0.25rem;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+  }
+
+  .modal-close:hover {
+    background: var(--bg-tertiary, #f3f4f6);
+    color: var(--text-primary, #374151);
+  }
+
+  .modal-body {
+    padding: 1.5rem;
+    overflow-y: auto;
+    flex: 1;
+  }
+
+  .preview-text {
+    background: var(--bg-secondary, #f8fafc);
+    border: 1px solid var(--border-secondary, #e2e8f0);
+    border-radius: 6px;
+    padding: 1rem;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    color: var(--text-primary, #374151);
+    margin: 0;
+  }
+
+  .preview-content {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .preview-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 0.75rem;
+    background: var(--bg-secondary, #f8fafc);
+    border: 1px solid var(--border-secondary, #e2e8f0);
+    border-radius: 6px;
+  }
+
+  .preview-key {
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-accent, #667eea);
+    min-width: 120px;
+    flex-shrink: 0;
+  }
+
+  .preview-value {
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.875rem;
+    color: var(--text-primary, #374151);
+    word-break: break-all;
+    flex: 1;
+  }
+
+  .preview-empty {
+    text-align: center;
+    color: var(--text-secondary, #6b7280);
+    font-style: italic;
+    padding: 2rem;
+  }
+
+  .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+    padding: 1.5rem;
+    border-top: 1px solid var(--border-secondary, #e5e7eb);
+  }
+
+  .modal-footer .btn-secondary {
+    background: var(--button-secondary, #f3f4f6);
+    color: var(--text-primary, #374151);
+    border: 1px solid var(--border-primary, #d1d5db);
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+  }
+
+  .modal-footer .btn-secondary:hover {
+    background: var(--button-secondary-hover, #e5e7eb);
+  }
+
+  .modal-footer .btn-primary {
+    background: var(--button-primary, #667eea);
+    color: white;
+    border: 1px solid var(--button-primary, #667eea);
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+  }
+
+  .modal-footer .btn-primary:hover {
+    background: var(--button-primary-hover, #5a67d8);
+    border-color: var(--button-primary-hover, #5a67d8);
+  }
+
+  /* Dark theme modal overrides */
+  :global([data-theme="dark"]) .modal-content {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-secondary);
+  }
+
+  :global([data-theme="dark"]) .modal-header {
+    border-bottom-color: var(--border-secondary);
+  }
+
+  :global([data-theme="dark"]) .modal-header h3 {
+    color: var(--text-primary);
+  }
+
+  :global([data-theme="dark"]) .modal-close {
+    color: var(--text-secondary);
+  }
+
+  :global([data-theme="dark"]) .modal-close:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+  }
+
+  :global([data-theme="dark"]) .preview-text {
+    background: var(--bg-secondary);
+    border-color: var(--border-secondary);
+    color: var(--text-primary);
+  }
+
+  :global([data-theme="dark"]) .preview-row {
+    background: var(--bg-secondary);
+    border-color: var(--border-secondary);
+  }
+
+  :global([data-theme="dark"]) .preview-key {
+    color: var(--text-accent);
+  }
+
+  :global([data-theme="dark"]) .preview-value {
+    color: var(--text-primary);
+  }
+
+  :global([data-theme="dark"]) .preview-empty {
+    color: var(--text-secondary);
+  }
+
+  :global([data-theme="dark"]) .modal-footer {
+    border-top-color: var(--border-secondary);
+  }
+
+  :global([data-theme="dark"]) .modal-footer .btn-secondary {
+    background: var(--button-secondary);
+    color: var(--text-primary);
+    border-color: var(--border-secondary);
+  }
+
+  :global([data-theme="dark"]) .modal-footer .btn-secondary:hover {
+    background: var(--button-secondary-hover);
   }
 </style>

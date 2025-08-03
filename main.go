@@ -9,6 +9,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -36,7 +38,6 @@ type ProxyResponse struct {
 type SavedRequest struct {
 	ID           string            `json:"id"`
 	Name         string            `json:"name"`
-	SafeName     string            `json:"safe_name"`
 	URL          string            `json:"url"`
 	Method       string            `json:"method"`
 	Headers      map[string]string `json:"headers"`
@@ -425,6 +426,171 @@ func generateID() string {
 	return hex.EncodeToString(bytes)
 }
 
+// generateUniqueName creates a unique name by appending a counter if needed
+func generateUniqueName(baseName string, requests []SavedRequest) string {
+	uniqueName := baseName
+	counter := 1
+
+	for {
+		// Check if this name is unique
+		isUnique := true
+		for _, req := range requests {
+			if strings.EqualFold(req.Name, uniqueName) {
+				isUnique = false
+				break
+			}
+		}
+
+		if isUnique {
+			return uniqueName
+		}
+
+		// Name is taken, try with counter
+		counter++
+		uniqueName = baseName + " (" + strconv.Itoa(counter) + ")"
+	}
+}
+
+// ResponseVariableRef represents a parsed response variable reference
+type ResponseVariableRef struct {
+	RequestName string
+	FieldPath   string
+	IsResponse  bool // true if referencing full response, false if specific field
+}
+
+// parseResponseVariable parses response variable syntax like {{"RequestName".field}} or {{\"RequestName\".field}}
+func parseResponseVariable(variable string) (*ResponseVariableRef, error) {
+	// Remove outer {{ and }}
+	if !strings.HasPrefix(variable, "{{") || !strings.HasSuffix(variable, "}}") {
+		return nil, fmt.Errorf("invalid variable format")
+	}
+
+	content := strings.TrimSpace(variable[2 : len(variable)-2])
+	log.Printf("Parsing response variable content: %q", content)
+
+	// Handle escaped quotes: {{\"RequestName\".field}} or {{"RequestName".field}}
+	var startQuote string
+	if strings.HasPrefix(content, "\\\"") {
+		startQuote = "\\\""
+	} else if strings.HasPrefix(content, "\"") {
+		startQuote = "\""
+	} else {
+		return nil, fmt.Errorf("not a response variable - doesn't start with quote")
+	}
+
+	// Extract request name and field path
+	var requestName, fieldPath string
+
+	if startQuote == "\\\"" {
+		// Handle escaped quotes: {{\"RequestName\".field}}
+		// Find the closing \"
+		endIndex := strings.Index(content[2:], "\\\".") // Skip the opening \"
+		if endIndex == -1 {
+			return nil, fmt.Errorf("unclosed escaped quote or missing field separator")
+		}
+		requestName = content[2 : endIndex+2] // Extract name between \"...\"
+		remaining := content[endIndex+4:]     // Skip past \"."
+		fieldPath = remaining
+	} else {
+		// Handle regular quotes: {{"RequestName".field}}
+		// Find the closing quote
+		endIndex := strings.Index(content[1:], "\".") // Skip the opening "
+		if endIndex == -1 {
+			return nil, fmt.Errorf("unclosed quote or missing field separator")
+		}
+		requestName = content[1 : endIndex+1] // Extract name between "..."
+		remaining := content[endIndex+3:]     // Skip past "."
+		fieldPath = remaining
+	}
+
+	log.Printf("Extracted - request: %q, field: %q", requestName, fieldPath)
+
+	if requestName == "" {
+		return nil, fmt.Errorf("empty request name")
+	}
+	if fieldPath == "" {
+		return nil, fmt.Errorf("empty field path")
+	}
+
+	return &ResponseVariableRef{
+		RequestName: requestName,
+		FieldPath:   fieldPath,
+		IsResponse:  fieldPath == "response",
+	}, nil
+}
+
+// extractJSONField extracts a field from JSON data using dot notation (e.g., "user.profile.email")
+func extractJSONField(data any, fieldPath string) (string, error) {
+	if data == nil {
+		return "", nil
+	}
+
+	// If requesting full response, convert to string
+	if fieldPath == "response" {
+		if str, ok := data.(string); ok {
+			return str, nil
+		}
+		// Convert JSON to string
+		jsonBytes, err := json.Marshal(data)
+		if err != nil {
+			return "", err
+		}
+		return string(jsonBytes), nil
+	}
+
+	// For other fields, navigate the JSON structure
+	current := data
+	parts := strings.Split(fieldPath, ".")
+
+	for _, part := range parts {
+		if part == "" {
+			continue
+		}
+
+		switch v := current.(type) {
+		case map[string]any:
+			if val, exists := v[part]; exists {
+				current = val
+			} else {
+				return "", nil // Field doesn't exist, return empty string
+			}
+		default:
+			return "", nil // Can't traverse further, return empty string
+		}
+	}
+
+	// Convert final value to string
+	switch v := current.(type) {
+	case string:
+		return v, nil
+	case nil:
+		return "", nil
+	default:
+		// Convert to JSON string for non-string types
+		jsonBytes, err := json.Marshal(v)
+		if err != nil {
+			return "", err
+		}
+		return string(jsonBytes), nil
+	}
+}
+
+// loadSavedRequestByName loads a saved request by name from the saved requests file
+func loadSavedRequestByName(requestName string) (*SavedRequest, error) {
+	data, err := loadSavedRequests()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, request := range data.Requests {
+		if request.Name == requestName {
+			return &request, nil
+		}
+	}
+
+	return nil, fmt.Errorf("request not found: %s", requestName)
+}
+
 // processTemplate applies variable substitution to a string using simple find/replace
 func processTemplate(input string, variables []Variable) (string, error) {
 	if input == "" {
@@ -432,6 +598,35 @@ func processTemplate(input string, variables []Variable) (string, error) {
 	}
 
 	result := input
+
+	// First, handle response variables
+	// Broader pattern to catch potential response variables for debugging
+	responseVarPattern := regexp.MustCompile(`\{\{[^}]*\}\}`)
+	allMatches := responseVarPattern.FindAllString(result, -1)
+
+	// Debug logging for response variables
+	var responseMatches []string
+	for _, match := range allMatches {
+		// Check if this looks like a response variable (contains quotes)
+		if strings.Contains(match, "\"") || strings.Contains(match, "\\\"") {
+			responseMatches = append(responseMatches, match)
+			log.Printf("Processing response variable: %q", match)
+		}
+	}
+
+	for _, match := range responseMatches {
+		if ref, err := parseResponseVariable(match); err == nil {
+			if request, err := loadSavedRequestByName(ref.RequestName); err == nil {
+				if request.LastResponse != nil {
+					if value, err := extractJSONField(request.LastResponse.Body, ref.FieldPath); err == nil {
+						result = strings.ReplaceAll(result, match, value)
+					}
+				}
+			}
+		}
+	}
+
+	// Then handle regular environment variables
 	for _, variable := range variables {
 		if variable.Key != "" {
 			// Replace {{variableName}} with the variable value
@@ -1061,11 +1256,12 @@ func handleDuplicateRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create duplicate
+	// Create duplicate with unique name
 	now := time.Now().Format(time.RFC3339)
+	uniqueName := generateUniqueName(originalRequest.Name+" (Copy)", data.Requests)
 	duplicatedReq := SavedRequest{
 		ID:           generateID(),
-		Name:         originalRequest.Name + " (Copy)",
+		Name:         uniqueName,
 		URL:          originalRequest.URL,
 		Method:       originalRequest.Method,
 		Headers:      make(map[string]string),
