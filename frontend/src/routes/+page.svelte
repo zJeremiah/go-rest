@@ -692,8 +692,13 @@
       const res = await fetch('/api/variables');
       if (res.ok) {
         const data = await res.json();
-        variables = data.variables || [];
-
+        // The API now returns VariableWithResolved objects with additional fields
+        variables = (data.variables || []).map(variable => ({
+          key: variable.key || '',
+          value: variable.value || '',
+          resolvedValue: variable.resolvedValue || variable.value || '',
+          isEnvVar: variable.isEnvVar || false
+        }));
       }
     } catch (error) {
       console.error('❌ Error loading variables:', error);
@@ -702,16 +707,23 @@
 
   async function saveVariables() {
     try {
+      // Only send key and value fields, not resolved values
+      const variablesToSave = variables.map(variable => ({
+        key: variable.key || '',
+        value: variable.value || ''
+      }));
+
       const res = await fetch('/api/variables/save', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ variables })
+        body: JSON.stringify({ variables: variablesToSave })
       });
 
       if (res.ok) {
-
+        // Reload variables to get updated resolved values
+        await loadVariables();
       } else {
         console.error('❌ Failed to save variables');
       }
@@ -1074,7 +1086,12 @@
   }
 
   function addVariable() {
-    variables = [...variables, { key: '', value: '' }];
+    variables = [...variables, { 
+      key: '', 
+      value: '', 
+      resolvedValue: '', 
+      isEnvVar: false 
+    }];
   }
 
   function removeVariable(index) {
@@ -1084,6 +1101,18 @@
 
   function updateVariable(index, field, value) {
     variables[index][field] = value;
+    
+    // If updating the value field, check if it's an environment variable
+    if (field === 'value') {
+      variables[index].isEnvVar = value.startsWith('$');
+      // Reset resolved value - it will be updated when saved
+      if (variables[index].isEnvVar) {
+        variables[index].resolvedValue = '';
+      } else {
+        variables[index].resolvedValue = value;
+      }
+    }
+    
     variables = [...variables]; // Trigger reactivity
     // Debounced save
     clearTimeout(variables.saveTimeout);
@@ -1606,13 +1635,21 @@
                     on:input={(e) => updateVariable(originalIndex, 'key', e.target.value)}
                     class="variable-key"
                   />
-                  <input 
-                    type="text" 
-                    placeholder="Value"
-                    bind:value={variable.value}
-                    on:input={(e) => updateVariable(originalIndex, 'value', e.target.value)}
-                    class="variable-value"
-                  />
+                  <div class="variable-value-container">
+                    <input 
+                      type="text" 
+                      placeholder="Value (use $ENV_VAR_NAME for environment variables)"
+                      bind:value={variable.value}
+                      on:input={(e) => updateVariable(originalIndex, 'value', e.target.value)}
+                      class="variable-value"
+                    />
+                    {#if variable.isEnvVar && variable.resolvedValue && variable.resolvedValue !== variable.value}
+                      <div class="env-var-resolved">
+                        <span class="env-var-label">🔗 Resolved:</span>
+                        <code class="env-var-value">{variable.resolvedValue}</code>
+                      </div>
+                    {/if}
+                  </div>
                 </div>
                 <div class="variable-footer">
                   {#if variable.key}
@@ -2415,14 +2452,50 @@
     transition: all 0.2s ease;
   }
 
-  .variable-value {
+  .variable-value-container {
     flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .variable-value {
     padding: 0.5rem;
     border: 1px solid #d1d5db;
     border-radius: 4px;
     font-size: 0.75rem;
     font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
     transition: all 0.2s ease;
+  }
+
+  .env-var-resolved {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.375rem 0.5rem;
+    background: #f0f9ff;
+    border: 1px solid #bae6fd;
+    border-radius: 4px;
+    font-size: 0.75rem;
+  }
+
+  .env-var-label {
+    color: #0369a1;
+    font-weight: 500;
+    font-size: 0.75rem;
+    white-space: nowrap;
+  }
+
+  .env-var-value {
+    background: #e0f2fe;
+    color: #0c4a6e;
+    padding: 0.125rem 0.375rem;
+    border-radius: 3px;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.75rem;
+    font-weight: 600;
+    word-break: break-all;
+    flex: 1;
   }
 
   .variable-key:focus,

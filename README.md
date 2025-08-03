@@ -15,6 +15,7 @@ A modern, lightweight REST API testing tool built with Go and Svelte. Test your 
 - **Request Grouping** - Organize requests into logical groups
 - **Search & Filter** - Search requests by name or URL, filter by groups
 - **Response Variables** - Reference data from previous requests using `{{ "Request Name".json_key }}` syntax
+- **Environment Variable References** - Reference system environment variables using `$ENV_VAR_NAME` syntax
 - **Auto-save** - Automatic saving of request changes with immediate parameter saving
 - **Request History** - View last response for each saved request
 - **Keyboard Shortcuts** - Send requests with `Cmd+Enter` (Mac) or `Ctrl+Enter` (Windows/Linux)
@@ -69,7 +70,7 @@ A modern, lightweight REST API testing tool built with Go and Svelte. Test your 
    ```
 
 6. **Open your browser**
-   Navigate to `http://localhost:83333`
+   Navigate to `http://localhost:8333`
 
 ## 🔧 Usage
 
@@ -88,7 +89,7 @@ A modern, lightweight REST API testing tool built with Go and Svelte. Test your 
    - Add request body for POST/PUT requests (supports Text, JSON, and Form data)
 
 3. **Send the Request**
-   - Click "📤 Send Request"
+   - Click "🚀 Send"
    - View the response with syntax highlighting
    - Copy response data with the 📋 Copy button
 
@@ -108,6 +109,13 @@ Environments allow you to switch between different sets of variables (e.g., dev 
 3. **Environment Variables**
    - Format: `{{variable_name}}`
    - Example: `{{host}}/api/users` where `host` might be `https://api.example.com`
+   
+4. **Environment Variable References**
+   - Reference system environment variables by prefixing variable values with `$`
+   - Format: Set variable value to `$ENV_VAR_NAME`
+   - Example: Set `api_key` variable value to `$API_KEY` to reference the system's `API_KEY` environment variable  
+   - Use case: `Authorization: Bearer {{api_key}}` where `api_key` value is `$SECRET_TOKEN`
+   - Benefits: Keep sensitive data out of configuration files, use system environment for dynamic values
 
 ### Using Response Variables
 
@@ -146,18 +154,42 @@ Access data from previous request responses to create dynamic request chains:
 
 The application supports the following environment variables:
 
-- `PORT` - Server port (default: 8080)
+- `PORT` - Server port (default: 8333)
+
+### Environment Variable References
+
+You can reference system environment variables in your template variables by prefixing the value with `$`:
+
+**Setup Example:**
+1. Set a system environment variable:
+   ```bash
+   export API_KEY="your-secret-api-key"
+   export BASE_URL="https://api.production.com"
+   ```
+
+2. Create template variables in your environment:
+   - Variable name: `auth_token`, Value: `$API_KEY`
+   - Variable name: `host`, Value: `$BASE_URL`
+
+3. Use in requests:
+   - URL: `{{host}}/users`
+   - Header: `Authorization: Bearer {{auth_token}}`
+
+**Benefits:**
+- Keep sensitive data out of `saved_requests.json`
+- Use different values per deployment environment
+- Dynamic configuration without code changes
 
 ### Data Storage
 
 All data is stored locally in `saved_requests.json` in the project root. This file contains:
 - Request definitions with separate body types (Text, JSON, Form URL Encoded)
 - Response history for response variable references
-- Environment configurations with template variables
+- Environment configurations with template variables (including `$ENV_VAR_NAME` references)
 - Group definitions for request organization
 - Application settings and UI preferences
 
-**Note**: Add `saved_requests.json` to your `.gitignore` if it contains sensitive data.
+**Note**: Add `saved_requests.json` to your `.gitignore` if it contains sensitive data. Environment variable references (`$VAR_NAME`) are stored as references only - actual values come from your system environment.
 
 ## 🏗️ Development
 
@@ -231,7 +263,8 @@ The Go server serves the built frontend from `frontend/dist/` and provides API e
 
 - The application runs a local server that can make requests to any URL
 - Be cautious when sharing `saved_requests.json` as it may contain sensitive data
-- Consider using environment variables for sensitive configuration
+- **Use Environment Variable References** - Store sensitive data (API keys, tokens) in system environment variables using `$ENV_VAR_NAME` syntax instead of hardcoding values
+- Environment variable references keep secrets out of configuration files that might be committed to version control
 - The tool is designed for development/testing, not production use
 
 ## 🤝 Contributing
@@ -279,6 +312,12 @@ This project is open source. See the LICENSE file for details.
 **Port already in use**
 - Change the port: `PORT=3000 go run main.go`
 - Kill existing processes using the port
+
+**Environment variables not resolving**
+- Ensure environment variables are set: `echo $YOUR_VAR_NAME`
+- Restart the application after setting new environment variables
+- Check variable names are exact matches (case-sensitive)
+- Variables showing as `$VAR_NAME` instead of values means the environment variable is not set
 
 ---
 

@@ -591,6 +591,19 @@ func loadSavedRequestByName(requestName string) (*SavedRequest, error) {
 	return nil, fmt.Errorf("request not found: %s", requestName)
 }
 
+// resolveEnvironmentVariable resolves environment variable references (values starting with $)
+func resolveEnvironmentVariable(value string) string {
+	if strings.HasPrefix(value, "$") {
+		envVarName := value[1:] // Remove the $ prefix
+		if envValue := os.Getenv(envVarName); envValue != "" {
+			return envValue
+		}
+		// If environment variable is not set, return the original value
+		return value
+	}
+	return value
+}
+
 // processTemplate applies variable substitution to a string using simple find/replace
 func processTemplate(input string, variables []Variable) (string, error) {
 	if input == "" {
@@ -629,9 +642,11 @@ func processTemplate(input string, variables []Variable) (string, error) {
 	// Then handle regular environment variables
 	for _, variable := range variables {
 		if variable.Key != "" {
-			// Replace {{variableName}} with the variable value
+			// Resolve environment variable reference if value starts with $
+			resolvedValue := resolveEnvironmentVariable(variable.Value)
+			// Replace {{variableName}} with the resolved variable value
 			placeholder := fmt.Sprintf("{{%s}}", variable.Key)
-			result = strings.ReplaceAll(result, placeholder, variable.Value)
+			result = strings.ReplaceAll(result, placeholder, resolvedValue)
 		}
 	}
 
@@ -1371,6 +1386,14 @@ func handleDuplicateRequest(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// VariableWithResolved represents a variable with its raw and resolved values
+type VariableWithResolved struct {
+	Key           string `json:"key"`
+	Value         string `json:"value"`         // Raw value (e.g., "$HOME")
+	ResolvedValue string `json:"resolvedValue"` // Resolved value (e.g., "/Users/jeremiah.zink")
+	IsEnvVar      bool   `json:"isEnvVar"`      // Whether this is an environment variable reference
+}
+
 // handleVariables handles GET requests to retrieve variables from current environment
 func handleVariables(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -1393,8 +1416,25 @@ func handleVariables(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Return raw values with resolved values for display
+	variablesWithResolved := make([]VariableWithResolved, len(currentEnv.Variables))
+	for i, variable := range currentEnv.Variables {
+		isEnvVar := strings.HasPrefix(variable.Value, "$")
+		resolvedValue := variable.Value
+		if isEnvVar {
+			resolvedValue = resolveEnvironmentVariable(variable.Value)
+		}
+
+		variablesWithResolved[i] = VariableWithResolved{
+			Key:           variable.Key,
+			Value:         variable.Value, // Keep raw value like "$HOME"
+			ResolvedValue: resolvedValue,  // Show resolved value like "/Users/jeremiah.zink"
+			IsEnvVar:      isEnvVar,
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(map[string][]Variable{"variables": currentEnv.Variables}); err != nil {
+	if err := json.NewEncoder(w).Encode(map[string][]VariableWithResolved{"variables": variablesWithResolved}); err != nil {
 		log.Printf("❌ Failed to encode variables: %v", err)
 	}
 }

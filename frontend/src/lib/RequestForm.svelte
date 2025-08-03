@@ -174,7 +174,9 @@
       vars.forEach(variable => {
         if (variable.key && variable.value !== undefined) {
           const regex = new RegExp(`{{\\s*${variable.key}\\s*}}`, 'g');
-          result = result.replace(regex, variable.value);
+          // Use resolved value for environment variables, fallback to raw value
+          const valueToUse = variable.isEnvVar && variable.resolvedValue ? variable.resolvedValue : variable.value;
+          result = result.replace(regex, valueToUse);
         }
       });
     }
