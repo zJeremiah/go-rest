@@ -357,11 +357,15 @@
       return; // Request not found
     }
     
+    // Store the original name for reverting if needed
+    const originalName = originalRequest.name;
+    const newName = request.name.trim();
+    
     // Validate and fix name for uniqueness
-    const validatedName = validateAndFixName(request, request.name);
+    const validatedName = validateAndFixName(request, newName);
     
     // Only proceed if the name actually changed
-    if (validatedName === originalRequest.name) {
+    if (validatedName === originalName) {
       return; // No change needed
     }
     
@@ -390,10 +394,38 @@
           savedRequests = [...savedRequests]; // Trigger reactivity
         }
       } else {
-        console.error('❌ Failed to update request name');
+        // Handle server error - revert name in UI
+        const errorText = await res.text();
+        console.error('❌ Failed to update request name:', errorText);
+        
+        // Revert the name in the UI
+        const index = savedRequests.findIndex(r => r.id === request.id);
+        if (index !== -1) {
+          savedRequests[index].name = originalName;
+          if (selectedRequest && selectedRequest.id === request.id) {
+            selectedRequest.name = originalName;
+          }
+          savedRequests = [...savedRequests]; // Trigger reactivity
+        }
+        
+        // Show user-friendly error message
+        alert(`Failed to rename request: ${errorText || 'Name might be duplicate or invalid'}`);
       }
     } catch (error) {
       console.error('❌ Error updating request name:', error);
+      
+      // Revert the name in UI on network error
+      const index = savedRequests.findIndex(r => r.id === request.id);
+      if (index !== -1) {
+        savedRequests[index].name = originalName;
+        if (selectedRequest && selectedRequest.id === request.id) {
+          selectedRequest.name = originalName;
+        }
+        savedRequests = [...savedRequests]; // Trigger reactivity
+      }
+      
+      // Show user-friendly error message
+      alert('Failed to rename request: Network error');
     }
   }
 
@@ -1166,7 +1198,7 @@
   // Helper functions for name uniqueness
   function isNameUnique(name, excludeId = null) {
     return !savedRequests.some(request => 
-      request.name.toLowerCase() === name.toLowerCase() && 
+      request.name === name && 
       request.id !== excludeId
     );
   }

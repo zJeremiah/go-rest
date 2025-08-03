@@ -432,10 +432,10 @@ func generateUniqueName(baseName string, requests []SavedRequest) string {
 	counter := 1
 
 	for {
-		// Check if this name is unique
+		// Check if this name is unique (case-sensitive)
 		isUnique := true
 		for _, req := range requests {
-			if strings.EqualFold(req.Name, uniqueName) {
+			if req.Name == uniqueName {
 				isUnique = false
 				break
 			}
@@ -784,6 +784,39 @@ func getCurrentEnvironment(data *SavedRequestsData) (*Environment, error) {
 	return nil, fmt.Errorf("current environment not found")
 }
 
+// deduplicateRequestNames ensures all request names are unique by adding suffixes to duplicates
+// Returns true if any changes were made
+func deduplicateRequestNames(data *SavedRequestsData) bool {
+	seenNames := make(map[string]bool)
+	hasChanges := false
+
+	for i := range data.Requests {
+		originalName := data.Requests[i].Name
+		candidateName := originalName
+		counter := 1
+
+		// Keep trying names until we find one that hasn't been used
+		for {
+			if !seenNames[candidateName] {
+				// This name is available
+				if candidateName != originalName {
+					log.Printf("🔧 Renamed duplicate request '%s' to '%s'", originalName, candidateName)
+					data.Requests[i].Name = candidateName
+					hasChanges = true
+				}
+				seenNames[candidateName] = true
+				break
+			}
+
+			// Name is taken, try with counter
+			counter++
+			candidateName = originalName + " (" + strconv.Itoa(counter) + ")"
+		}
+	}
+
+	return hasChanges
+}
+
 // loadSavedRequests reads saved requests from JSON file
 func loadSavedRequests() (*SavedRequestsData, error) {
 	fileAccessMutex.RLock()
@@ -858,6 +891,20 @@ func loadSavedRequests() (*SavedRequestsData, error) {
 
 	// Migrate string bodies to parsed JSON objects when possible
 	migrateStringBodiesToJSON(data)
+
+	// Ensure all request names are unique (fix manual edits or data corruption)
+	hasNameChanges := deduplicateRequestNames(data)
+
+	// If we made changes to deduplicate names, save the corrected data
+	if hasNameChanges {
+		// Temporarily release read lock to allow write lock for saving
+		fileAccessMutex.RUnlock()
+		log.Printf("💾 Saving deduplicated request names to file")
+		if err := saveSavedRequests(data); err != nil {
+			log.Printf("⚠️  Failed to save deduplicated names: %v", err)
+		}
+		fileAccessMutex.RLock() // Re-acquire read lock for consistency
+	}
 
 	return data, nil
 }
@@ -1007,6 +1054,14 @@ func handleSaveRequest(w http.ResponseWriter, r *http.Request) {
 		req.Group = "default"
 	}
 
+	// Check for duplicate names (case-sensitive)
+	for _, existing := range data.Requests {
+		if existing.Name == req.Name {
+			respondWithError(w, fmt.Sprintf("Request name '%s' already exists. Please choose a different name.", req.Name), http.StatusConflict)
+			return
+		}
+	}
+
 	// Create new saved request
 	now := time.Now().Format(time.RFC3339)
 	savedReq := SavedRequest{
@@ -1102,6 +1157,14 @@ func handleUpdateRequest(w http.ResponseWriter, r *http.Request) {
 		log.Printf("❌ Failed to load saved requests: %v", err)
 		respondWithError(w, "Failed to load saved requests", http.StatusInternalServerError)
 		return
+	}
+
+	// Check for duplicate names (case-sensitive, excluding the current request)
+	for _, existing := range data.Requests {
+		if existing.ID != req.ID && existing.Name == req.Name {
+			respondWithError(w, fmt.Sprintf("Request name '%s' already exists. Please choose a different name.", req.Name), http.StatusConflict)
+			return
+		}
 	}
 
 	// Find and update the request
