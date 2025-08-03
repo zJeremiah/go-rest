@@ -195,14 +195,12 @@
   }
 
   async function saveRequest(requestData) {
-
+    console.log('💾 saveRequest called with requestData:', requestData);
+    console.log('💾 Current selectedRequest:', selectedRequest);
     
     if (!selectedRequest) {
-
       return;
     }
-
-
 
     try {
       const updateData = {
@@ -212,12 +210,17 @@
         method: requestData.method,
         headers: requestData.headers || {},
         body: requestData.body || '',
+        bodyType: requestData.bodyType || selectedRequest.bodyType || 'text',
+        bodyText: requestData.bodyText || selectedRequest.bodyText || '',
+        bodyJson: requestData.bodyJson || selectedRequest.bodyJson || [],
+        bodyForm: requestData.bodyForm || selectedRequest.bodyForm || [],
         params: requestData.params || [],
         group: requestData.group || selectedRequest.group || 'default',
-        description: requestData.description || ''
+        description: requestData.description || '',
+        lastResponse: selectedRequest.lastResponse || null
       };
-
-
+      
+      console.log('📤 Sending updateData to backend:', updateData);
 
 
 
@@ -441,7 +444,19 @@
         },
         body: JSON.stringify({
           id: request.id,
-          group: request.group
+          name: request.name,
+          url: request.url,
+          method: request.method,
+          headers: request.headers || {},
+          body: request.body || '',
+          bodyType: request.bodyType || 'text',
+          bodyText: request.bodyText || '',
+          bodyJson: request.bodyJson || [],
+          bodyForm: request.bodyForm || [],
+          params: request.params || [],
+          group: request.group,
+          description: request.description || '',
+          lastResponse: request.lastResponse || null
         })
       });
 
@@ -456,7 +471,7 @@
         
         // Refresh groups and filtered requests
         loadGroups();
-        updateFilteredRequests();
+        filterRequests();
       } else {
         console.error('❌ Failed to update request group');
       }
@@ -1632,13 +1647,13 @@
                     type="text" 
                     placeholder="Variable name"
                     bind:value={variable.key}
-                    on:input={(e) => updateVariable(originalIndex, 'key', e.target.value)}
+                    on:blur={(e) => updateVariable(originalIndex, 'key', e.target.value)}
                     class="variable-key"
                   />
                   <div class="variable-value-container">
                     <input 
                       type="text" 
-                      placeholder="Value (use $ENV_VAR_NAME for environment variables)"
+                      placeholder="Value (use $ENV_NAME for env vars)"
                       bind:value={variable.value}
                       on:input={(e) => updateVariable(originalIndex, 'value', e.target.value)}
                       class="variable-value"

@@ -154,28 +154,28 @@ func main() {
 
 	// API routes group
 	r.Route("/api", func(r chi.Router) {
-		r.Post("/proxy", handleProxy)
-		r.Get("/health", handleHealth)
-		r.Get("/requests", handleRequests)
-		r.Post("/requests/save", handleSaveRequest)
-		r.Put("/requests/update", handleUpdateRequest)
-		r.Delete("/requests/delete", handleDeleteRequest)
-		r.Post("/requests/duplicate", handleDuplicateRequest)
-		r.Get("/variables", handleVariables)
-		r.Post("/variables/save", handleSaveVariables)
+		r.Post("/proxy", proxy)
+		r.Get("/health", health)
+		r.Get("/requests", requests)
+		r.Post("/requests/save", saveRequest)
+		r.Put("/requests/update", updateRequest)
+		r.Delete("/requests/delete", deleteRequest)
+		r.Post("/requests/duplicate", duplicateRequest)
+		r.Get("/variables", variables)
+		r.Post("/variables/save", saveVariables)
 
 		// Environment management endpoints
-		r.Get("/environments", handleEnvironments)
-		r.Post("/environments", handleCreateEnvironment)
-		r.Put("/environments/{id}", handleUpdateEnvironment)
-		r.Delete("/environments/{id}", handleDeleteEnvironment)
+		r.Get("/environments", environments)
+		r.Post("/environments", createEnvironment)
+		r.Put("/environments/{id}", updateEnvironment)
+		r.Delete("/environments/{id}", deleteEnvironment)
 
 		// Group management endpoints
-		r.Get("/groups", handleGroups)
-		r.Post("/groups", handleCreateGroup)
-		r.Delete("/groups/{id}", handleDeleteGroup)
-		r.Post("/environments/{id}/copy", handleCopyEnvironment)
-		r.Post("/environments/{id}/activate", handleActivateEnvironment)
+		r.Get("/groups", groups)
+		r.Post("/groups", createGroup)
+		r.Delete("/groups/{id}", deleteGroup)
+		r.Post("/environments/{id}/copy", copyEnvironment)
+		r.Post("/environments/{id}/activate", activateEnvironment)
 
 		// UI settings endpoints
 		r.Post("/settings/wordwrap", handleSaveWordWrap)
@@ -254,8 +254,8 @@ func (rw *responseWrapper) WriteHeader(code int) {
 	rw.ResponseWriter.WriteHeader(code)
 }
 
-// handleHealth provides a simple health check endpoint
-func handleHealth(w http.ResponseWriter, r *http.Request) {
+// health provides a simple health check endpoint
+func health(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
 		"status":  "healthy",
@@ -263,8 +263,8 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleProxy handles requests to external APIs
-func handleProxy(w http.ResponseWriter, r *http.Request) {
+// proxy handles requests to external APIs
+func proxy(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("⚠️  Panic in handleProxy: %v", r)
@@ -994,8 +994,8 @@ func tryDirectWrite(jsonData []byte) error {
 	return file.Sync() // Ensure data is written to disk
 }
 
-// handleRequests handles GET requests to retrieve all saved requests
-func handleRequests(w http.ResponseWriter, r *http.Request) {
+// requests handles GET requests to retrieve all saved requests
+func requests(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -1014,8 +1014,8 @@ func handleRequests(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleSaveRequest handles POST requests to save a new request
-func handleSaveRequest(w http.ResponseWriter, r *http.Request) {
+// saveRequest handles POST requests to save a new request
+func saveRequest(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -1116,8 +1116,8 @@ func handleSaveRequest(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleUpdateRequest handles PUT requests to update an existing request
-func handleUpdateRequest(w http.ResponseWriter, r *http.Request) {
+// updateRequest handles PUT requests to update an existing request
+func updateRequest(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPut {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -1145,7 +1145,7 @@ func handleUpdateRequest(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
-
+	fmt.Println(req)
 	// Validate required fields
 	if req.ID == "" {
 		respondWithError(w, "Request ID is required", http.StatusBadRequest)
@@ -1226,8 +1226,8 @@ func handleUpdateRequest(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"status": "updated"})
 }
 
-// handleDeleteRequest handles DELETE requests to delete a request
-func handleDeleteRequest(w http.ResponseWriter, r *http.Request) {
+// deleteRequest handles DELETE requests to delete a request
+func deleteRequest(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodDelete {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -1290,8 +1290,8 @@ func handleDeleteRequest(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"status": "deleted"})
 }
 
-// handleDuplicateRequest handles POST requests to duplicate a request
-func handleDuplicateRequest(w http.ResponseWriter, r *http.Request) {
+// duplicateRequest handles POST requests to duplicate a request
+func duplicateRequest(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -1394,8 +1394,8 @@ type VariableWithResolved struct {
 	IsEnvVar      bool   `json:"isEnvVar"`      // Whether this is an environment variable reference
 }
 
-// handleVariables handles GET requests to retrieve variables from current environment
-func handleVariables(w http.ResponseWriter, r *http.Request) {
+// variables handles GET requests to retrieve variables from current environment
+func variables(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -1439,8 +1439,8 @@ func handleVariables(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleSaveVariables handles POST requests to save variables to current environment
-func handleSaveVariables(w http.ResponseWriter, r *http.Request) {
+// saveVariables handles POST requests to save variables to current environment
+func saveVariables(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -1496,8 +1496,8 @@ func handleSaveVariables(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleEnvironments handles GET requests to list all environments
-func handleEnvironments(w http.ResponseWriter, r *http.Request) {
+// environments handles GET requests to list all environments
+func environments(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -1520,8 +1520,8 @@ func handleEnvironments(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleCreateEnvironment handles POST requests to create a new environment
-func handleCreateEnvironment(w http.ResponseWriter, r *http.Request) {
+// createEnvironment handles POST requests to create a new environment
+func createEnvironment(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -1585,8 +1585,8 @@ func handleCreateEnvironment(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleUpdateEnvironment handles PUT requests to update an environment
-func handleUpdateEnvironment(w http.ResponseWriter, r *http.Request) {
+// updateEnvironment handles PUT requests to update an environment
+func updateEnvironment(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPut {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -1660,8 +1660,8 @@ func handleUpdateEnvironment(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleDeleteEnvironment handles DELETE requests to delete an environment
-func handleDeleteEnvironment(w http.ResponseWriter, r *http.Request) {
+// deleteEnvironment handles DELETE requests to delete an environment
+func deleteEnvironment(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodDelete {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -1725,8 +1725,8 @@ func handleDeleteEnvironment(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleCopyEnvironment handles POST requests to copy variables between environments
-func handleCopyEnvironment(w http.ResponseWriter, r *http.Request) {
+// copyEnvironment handles POST requests to copy variables between environments
+func copyEnvironment(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -1808,8 +1808,8 @@ func handleCopyEnvironment(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleActivateEnvironment handles POST requests to activate an environment
-func handleActivateEnvironment(w http.ResponseWriter, r *http.Request) {
+// activateEnvironment handles POST requests to activate an environment
+func activateEnvironment(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -1861,8 +1861,8 @@ func handleActivateEnvironment(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleGroups handles GET requests to get all groups
-func handleGroups(w http.ResponseWriter, r *http.Request) {
+// groups handles GET requests to get all groups
+func groups(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -1884,8 +1884,8 @@ func handleGroups(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleCreateGroup handles POST requests to create a new group
-func handleCreateGroup(w http.ResponseWriter, r *http.Request) {
+// createGroup handles POST requests to create a new group
+func createGroup(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -1948,8 +1948,8 @@ func handleCreateGroup(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleDeleteGroup handles DELETE requests to delete a group
-func handleDeleteGroup(w http.ResponseWriter, r *http.Request) {
+// deleteGroup handles DELETE requests to delete a group
+func deleteGroup(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodDelete {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return

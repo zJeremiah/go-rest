@@ -691,14 +691,28 @@
 
   // Handle group change
   function handleGroupChange() {
+    console.log('🔄 handleGroupChange called, selectedRequest:', selectedRequest);
     if (selectedRequest) {
       clearTimeout(urlSaveTimeout);
-      // Force save immediately for group changes
-      saveCurrentRequest();
-      // Also trigger a manual save to be extra sure
-      setTimeout(() => {
-        saveCurrentRequest();
-      }, 100);
+      
+      // For group changes, send a complete update with existing data
+      const groupUpdateData = {
+        url: selectedRequest.url,
+        method: selectedRequest.method,
+        headers: selectedRequest.headers || {},
+        body: selectedRequest.body || '',
+        bodyType: selectedRequest.bodyType || 'text',
+        bodyText: selectedRequest.bodyText || '',
+        bodyJson: selectedRequest.bodyJson || [],
+        bodyForm: selectedRequest.bodyForm || [],
+        params: selectedRequest.params || [],
+        group: selectedRequest.group, // This will have the new value from the binding
+        description: selectedRequest.description || ''
+      };
+      
+      console.log('📤 Dispatching group update data:', groupUpdateData);
+      // Dispatch save event with complete data
+      dispatch('save', groupUpdateData);
     }
   }
 
