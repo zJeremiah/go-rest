@@ -86,8 +86,8 @@ type Group struct {
 	UpdatedAt string `json:"updatedAt"`
 }
 
-// parseBodyAsJSON attempts to parse a string body as JSON, returning the parsed object or the original string
-func parseBodyAsJSON(body any) any {
+// parseJSON attempts to parse a string body as JSON, returning the parsed object or the original string
+func parseJSON(body any) any {
 	// If it's already not a string, return as-is
 	if body == nil {
 		return ""
@@ -295,7 +295,7 @@ func proxy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get variables from current environment for template processing
-	data, err := loadSavedRequests()
+	data, err := loadRequests()
 	if err != nil {
 		log.Printf("❌ Failed to load environment data: %v", err)
 		respondWithError(w, "Failed to load environment data", http.StatusInternalServerError)
@@ -313,7 +313,7 @@ func proxy(w http.ResponseWriter, r *http.Request) {
 	req.Variables = currentEnv.Variables
 
 	// Apply template processing to substitute variables
-	processedReq := processRequestTemplates(req)
+	processedReq := processTemplates(req)
 	log.Printf("🔄 Original URL: %s", req.URL)
 	if processedReq.URL != req.URL {
 		log.Printf("✨ Processed URL: %s", processedReq.URL)
@@ -404,7 +404,7 @@ func makeHTTPRequest(req ProxyRequest) ProxyResponse {
 	log.Printf("✅ Request completed: %d %s (%d bytes)", resp.StatusCode, resp.Status, len(body))
 
 	// Parse response body as JSON if possible
-	responseBody := parseBodyAsJSON(string(body))
+	responseBody := parseJSON(string(body))
 
 	return ProxyResponse{
 		Status:     resp.Status,
@@ -426,8 +426,8 @@ func generateID() string {
 	return hex.EncodeToString(bytes)
 }
 
-// generateUniqueName creates a unique name by appending a counter if needed
-func generateUniqueName(baseName string, requests []SavedRequest) string {
+// uniqueName creates a unique name by appending a counter if needed
+func uniqueName(baseName string, requests []SavedRequest) string {
 	uniqueName := baseName
 	counter := 1
 
@@ -451,15 +451,15 @@ func generateUniqueName(baseName string, requests []SavedRequest) string {
 	}
 }
 
-// ResponseVariableRef represents a parsed response variable reference
-type ResponseVariableRef struct {
+// RespVarRef represents a parsed response variable reference
+type RespVarRef struct {
 	RequestName string
 	FieldPath   string
 	IsResponse  bool // true if referencing full response, false if specific field
 }
 
-// parseResponseVariable parses response variable syntax like {{"RequestName".field}} or {{\"RequestName\".field}}
-func parseResponseVariable(variable string) (*ResponseVariableRef, error) {
+// parseVariable parses response variable syntax like {{"RequestName".field}} or {{\"RequestName\".field}}
+func parseVariable(variable string) (*RespVarRef, error) {
 	// Remove outer {{ and }}
 	if !strings.HasPrefix(variable, "{{") || !strings.HasSuffix(variable, "}}") {
 		return nil, fmt.Errorf("invalid variable format")
@@ -512,7 +512,7 @@ func parseResponseVariable(variable string) (*ResponseVariableRef, error) {
 		return nil, fmt.Errorf("empty field path")
 	}
 
-	return &ResponseVariableRef{
+	return &RespVarRef{
 		RequestName: requestName,
 		FieldPath:   fieldPath,
 		IsResponse:  fieldPath == "response",
@@ -588,9 +588,9 @@ func extractJSONField(data any, fieldPath string) (*JSONFieldResult, error) {
 	}
 }
 
-// loadSavedRequestByName loads a saved request by name from the saved requests file
-func loadSavedRequestByName(requestName string) (*SavedRequest, error) {
-	data, err := loadSavedRequests()
+// loadRequest loads a saved request by name from the saved requests file
+func loadRequest(requestName string) (*SavedRequest, error) {
+	data, err := loadRequests()
 	if err != nil {
 		return nil, err
 	}
@@ -604,8 +604,8 @@ func loadSavedRequestByName(requestName string) (*SavedRequest, error) {
 	return nil, fmt.Errorf("request not found: %s", requestName)
 }
 
-// resolveEnvironmentVariable resolves environment variable references (values starting with $)
-func resolveEnvironmentVariable(value string) string {
+// resolveEnvVar resolves environment variable references (values starting with $)
+func resolveEnvVar(value string) string {
 	if strings.HasPrefix(value, "$") {
 		envVarName := value[1:] // Remove the $ prefix
 		if envValue := os.Getenv(envVarName); envValue != "" {
@@ -641,13 +641,13 @@ func processTemplate(input string, variables []Variable) (string, error) {
 	}
 
 	// Handle response variables with JSON-aware substitution
-	result = processJSONAwareSubstitution(result, responseMatches)
+	result = processSubstitution(result, responseMatches)
 
 	// Then handle regular environment variables
 	for _, variable := range variables {
 		if variable.Key != "" {
 			// Resolve environment variable reference if value starts with $
-			resolvedValue := resolveEnvironmentVariable(variable.Value)
+			resolvedValue := resolveEnvVar(variable.Value)
 			// Replace {{variableName}} with the resolved variable value
 			placeholder := fmt.Sprintf("{{%s}}", variable.Key)
 			result = strings.ReplaceAll(result, placeholder, resolvedValue)
@@ -657,17 +657,17 @@ func processTemplate(input string, variables []Variable) (string, error) {
 	return result, nil
 }
 
-// processJSONAwareSubstitution performs JSON-aware substitution for response variables
-func processJSONAwareSubstitution(input string, responseMatches []string) string {
+// processSubstitution performs JSON-aware substitution for response variables
+func processSubstitution(input string, responseMatches []string) string {
 	result := input
 
 	for _, match := range responseMatches {
-		ref, err := parseResponseVariable(match)
+		ref, err := parseVariable(match)
 		if err != nil {
 			continue
 		}
 
-		request, err := loadSavedRequestByName(ref.RequestName)
+		request, err := loadRequest(ref.RequestName)
 		if err != nil {
 			continue
 		}
@@ -683,7 +683,7 @@ func processJSONAwareSubstitution(input string, responseMatches []string) string
 
 		if fieldResult.IsObject {
 			// For JSON objects, perform JSON-aware substitution
-			result = substituteJSONObject(result, match, fieldResult.Value)
+			result = subJSONObject(result, match, fieldResult.Value)
 		} else {
 			// For primitive values, use simple string replacement
 			result = strings.ReplaceAll(result, match, fieldResult.Value)
@@ -693,8 +693,8 @@ func processJSONAwareSubstitution(input string, responseMatches []string) string
 	return result
 }
 
-// substituteJSONObject performs JSON-aware substitution of objects
-func substituteJSONObject(input, placeholder, jsonValue string) string {
+// subJSONObject performs JSON-aware substitution of objects
+func subJSONObject(input, placeholder, jsonValue string) string {
 	// Check if the placeholder is within a JSON context (surrounded by quotes)
 	quotedPlaceholder := "\"" + placeholder + "\""
 
@@ -708,8 +708,8 @@ func substituteJSONObject(input, placeholder, jsonValue string) string {
 	}
 }
 
-// processRequestTemplates applies variable substitution to all templated fields in a request
-func processRequestTemplates(req ProxyRequest) ProxyRequest {
+// processTemplates applies variable substitution to all templated fields in a request
+func processTemplates(req ProxyRequest) ProxyRequest {
 	// Process URL
 	if processedURL, err := processTemplate(req.URL, req.Variables); err == nil {
 		req.URL = processedURL
@@ -743,7 +743,7 @@ func processRequestTemplates(req ProxyRequest) ProxyRequest {
 	bodyStr := bodyToString(req.Body)
 	if processedBodyStr, err := processTemplate(bodyStr, req.Variables); err == nil {
 		// Parse the processed body as JSON if possible
-		req.Body = parseBodyAsJSON(processedBodyStr)
+		req.Body = parseJSON(processedBodyStr)
 	} else {
 		log.Printf("⚠️  Template error in body: %v", err)
 	}
@@ -751,8 +751,8 @@ func processRequestTemplates(req ProxyRequest) ProxyRequest {
 	return req
 }
 
-// initializeDefaultEnvironment creates a default environment
-func initializeDefaultEnvironment(data *SavedRequestsData) *SavedRequestsData {
+// initEnv creates a default environment
+func initEnv(data *SavedRequestsData) *SavedRequestsData {
 	now := time.Now().Format(time.RFC3339)
 	defaultEnv := Environment{
 		ID:        generateID(),
@@ -767,8 +767,8 @@ func initializeDefaultEnvironment(data *SavedRequestsData) *SavedRequestsData {
 	return data
 }
 
-// migrateRequestsToDefaultGroup migrates requests without groups to default group
-func migrateRequestsToDefaultGroup(data *SavedRequestsData) {
+// migrateDefaultGroup migrates requests without groups to default group
+func migrateDefaultGroup(data *SavedRequestsData) {
 	migratedCount := 0
 	for i := range data.Requests {
 		if data.Requests[i].Group == "" {
@@ -781,8 +781,8 @@ func migrateRequestsToDefaultGroup(data *SavedRequestsData) {
 	}
 }
 
-// migrateStringBodiesToJSON migrates string bodies to parsed JSON objects when possible
-func migrateStringBodiesToJSON(data *SavedRequestsData) {
+// migrateStringToJSON migrates string bodies to parsed JSON objects when possible
+func migrateStringToJSON(data *SavedRequestsData) {
 	migratedRequestBodies := 0
 	migratedResponseBodies := 0
 
@@ -790,7 +790,7 @@ func migrateStringBodiesToJSON(data *SavedRequestsData) {
 		// Migrate request body - only migrate if it's currently a string that can be parsed as JSON
 		if data.Requests[i].Body != nil {
 			if bodyStr, ok := data.Requests[i].Body.(string); ok && strings.TrimSpace(bodyStr) != "" {
-				parsedBody := parseBodyAsJSON(bodyStr)
+				parsedBody := parseJSON(bodyStr)
 				// Check if parsing resulted in a different type (not a string)
 				if _, stillString := parsedBody.(string); !stillString {
 					data.Requests[i].Body = parsedBody
@@ -802,7 +802,7 @@ func migrateStringBodiesToJSON(data *SavedRequestsData) {
 		// Migrate response body if it exists - only migrate if it's currently a string that can be parsed as JSON
 		if data.Requests[i].LastResponse != nil && data.Requests[i].LastResponse.Body != nil {
 			if bodyStr, ok := data.Requests[i].LastResponse.Body.(string); ok && strings.TrimSpace(bodyStr) != "" {
-				parsedBody := parseBodyAsJSON(bodyStr)
+				parsedBody := parseJSON(bodyStr)
 				// Check if parsing resulted in a different type (not a string)
 				if _, stillString := parsedBody.(string); !stillString {
 					data.Requests[i].LastResponse.Body = parsedBody
@@ -818,8 +818,8 @@ func migrateStringBodiesToJSON(data *SavedRequestsData) {
 	}
 }
 
-// migrateVariablesToEnvironments migrates legacy variables to default environment
-func migrateVariablesToEnvironments(data *SavedRequestsData) *SavedRequestsData {
+// migrateVarsToEnvs migrates legacy variables to default environment
+func migrateVarsToEnvs(data *SavedRequestsData) *SavedRequestsData {
 	now := time.Now().Format(time.RFC3339)
 	defaultEnv := Environment{
 		ID:        generateID(),
@@ -854,9 +854,9 @@ func getCurrentEnvironment(data *SavedRequestsData) (*Environment, error) {
 	return nil, fmt.Errorf("current environment not found")
 }
 
-// deduplicateRequestNames ensures all request names are unique by adding suffixes to duplicates
+// dedupRequestNames ensures all request names are unique by adding suffixes to duplicates
 // Returns true if any changes were made
-func deduplicateRequestNames(data *SavedRequestsData) bool {
+func dedupRequestNames(data *SavedRequestsData) bool {
 	seenNames := make(map[string]bool)
 	hasChanges := false
 
@@ -887,8 +887,8 @@ func deduplicateRequestNames(data *SavedRequestsData) bool {
 	return hasChanges
 }
 
-// loadSavedRequests reads saved requests from JSON file
-func loadSavedRequests() (*SavedRequestsData, error) {
+// loadRequests reads saved requests from JSON file
+func loadRequests() (*SavedRequestsData, error) {
 	fileAccessMutex.RLock()
 	defer fileAccessMutex.RUnlock()
 
@@ -900,7 +900,7 @@ func loadSavedRequests() (*SavedRequestsData, error) {
 
 	if _, err := os.Stat(requestsFileName); os.IsNotExist(err) {
 		// File doesn't exist, create default environment
-		data = initializeDefaultEnvironment(data)
+		data = initEnv(data)
 		return data, nil
 	}
 
@@ -911,7 +911,7 @@ func loadSavedRequests() (*SavedRequestsData, error) {
 
 	if len(file) == 0 {
 		// Empty file, create default environment
-		data = initializeDefaultEnvironment(data)
+		data = initEnv(data)
 		return data, nil
 	}
 
@@ -919,7 +919,7 @@ func loadSavedRequests() (*SavedRequestsData, error) {
 		log.Printf("⚠️  JSON parse error in %s: %v", requestsFileName, err)
 		log.Printf("🔧 Attempting to recover by creating new empty file")
 		// If JSON is corrupted, create a new file with default environment
-		data = initializeDefaultEnvironment(data)
+		data = initEnv(data)
 		return data, nil
 	}
 
@@ -935,12 +935,12 @@ func loadSavedRequests() (*SavedRequestsData, error) {
 
 	// Migration: If we have legacy variables but no environments, migrate them
 	if len(data.Variables) > 0 && len(data.Environments) == 0 {
-		data = migrateVariablesToEnvironments(data)
+		data = migrateVarsToEnvs(data)
 	}
 
 	// Ensure we have at least a default environment
 	if len(data.Environments) == 0 {
-		data = initializeDefaultEnvironment(data)
+		data = initEnv(data)
 	}
 
 	// Ensure current environment is set
@@ -957,13 +957,13 @@ func loadSavedRequests() (*SavedRequestsData, error) {
 	ensureDefaultGroup(data)
 
 	// Migrate existing requests without groups to default group
-	migrateRequestsToDefaultGroup(data)
+	migrateDefaultGroup(data)
 
 	// Migrate string bodies to parsed JSON objects when possible
-	migrateStringBodiesToJSON(data)
+	migrateStringToJSON(data)
 
 	// Ensure all request names are unique (fix manual edits or data corruption)
-	hasNameChanges := deduplicateRequestNames(data)
+	hasNameChanges := dedupRequestNames(data)
 
 	// If we made changes to deduplicate names, save the corrected data
 	if hasNameChanges {
@@ -1056,7 +1056,7 @@ func requests(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := loadSavedRequests()
+	data, err := loadRequests()
 	if err != nil {
 		log.Printf("❌ Failed to load saved requests: %v", err)
 		respondWithError(w, "Failed to load saved requests", http.StatusInternalServerError)
@@ -1112,7 +1112,7 @@ func saveRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Load existing requests
-	data, err := loadSavedRequests()
+	data, err := loadRequests()
 	if err != nil {
 		log.Printf("❌ Failed to load saved requests: %v", err)
 		respondWithError(w, "Failed to load saved requests", http.StatusInternalServerError)
@@ -1140,7 +1140,7 @@ func saveRequest(w http.ResponseWriter, r *http.Request) {
 		URL:          req.URL,
 		Method:       req.Method,
 		Headers:      req.Headers,
-		Body:         parseBodyAsJSON(req.Body), // Set legacy body field only for new requests
+		Body:         parseJSON(req.Body), // Set legacy body field only for new requests
 		BodyType:     req.BodyType,
 		BodyText:     req.BodyText,
 		BodyJson:     req.BodyJson,
@@ -1222,7 +1222,7 @@ func updateRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Load existing requests
-	data, err := loadSavedRequests()
+	data, err := loadRequests()
 	if err != nil {
 		log.Printf("❌ Failed to load saved requests: %v", err)
 		respondWithError(w, "Failed to load saved requests", http.StatusInternalServerError)
@@ -1246,7 +1246,7 @@ func updateRequest(w http.ResponseWriter, r *http.Request) {
 			data.Requests[i].URL = req.URL
 			data.Requests[i].Method = req.Method
 			data.Requests[i].Headers = req.Headers
-			data.Requests[i].Body = parseBodyAsJSON(req.Body) // Update legacy body with active type
+			data.Requests[i].Body = parseJSON(req.Body) // Update legacy body with active type
 			data.Requests[i].BodyType = req.BodyType
 			data.Requests[i].BodyText = req.BodyText
 			data.Requests[i].BodyJson = req.BodyJson
@@ -1304,7 +1304,7 @@ func deleteRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Load existing requests
-	data, err := loadSavedRequests()
+	data, err := loadRequests()
 	if err != nil {
 		log.Printf("❌ Failed to load saved requests: %v", err)
 		respondWithError(w, "Failed to load saved requests", http.StatusInternalServerError)
@@ -1368,7 +1368,7 @@ func duplicateRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Load existing requests
-	data, err := loadSavedRequests()
+	data, err := loadRequests()
 	if err != nil {
 		log.Printf("❌ Failed to load saved requests: %v", err)
 		respondWithError(w, "Failed to load saved requests", http.StatusInternalServerError)
@@ -1391,7 +1391,7 @@ func duplicateRequest(w http.ResponseWriter, r *http.Request) {
 
 	// Create duplicate with unique name
 	now := time.Now().Format(time.RFC3339)
-	uniqueName := generateUniqueName(originalRequest.Name+" (Copy)", data.Requests)
+	uniqueName := uniqueName(originalRequest.Name+" (Copy)", data.Requests)
 	duplicatedReq := SavedRequest{
 		ID:           generateID(),
 		Name:         uniqueName,
@@ -1456,7 +1456,7 @@ func variables(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := loadSavedRequests()
+	data, err := loadRequests()
 	if err != nil {
 		log.Printf("❌ Failed to load variables: %v", err)
 		respondWithError(w, "Failed to load variables", http.StatusInternalServerError)
@@ -1477,7 +1477,7 @@ func variables(w http.ResponseWriter, r *http.Request) {
 		isEnvVar := strings.HasPrefix(variable.Value, "$")
 		resolvedValue := variable.Value
 		if isEnvVar {
-			resolvedValue = resolveEnvironmentVariable(variable.Value)
+			resolvedValue = resolveEnvVar(variable.Value)
 		}
 
 		variablesWithResolved[i] = VariableWithResolved{
@@ -1512,7 +1512,7 @@ func saveVariables(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Load existing data
-	data, err := loadSavedRequests()
+	data, err := loadRequests()
 	if err != nil {
 		log.Printf("❌ Failed to load saved data: %v", err)
 		respondWithError(w, "Failed to load saved data", http.StatusInternalServerError)
@@ -1558,7 +1558,7 @@ func environments(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := loadSavedRequests()
+	data, err := loadRequests()
 	if err != nil {
 		log.Printf("❌ Failed to load environments: %v", err)
 		respondWithError(w, "Failed to load environments", http.StatusInternalServerError)
@@ -1598,7 +1598,7 @@ func createEnvironment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Load existing data
-	data, err := loadSavedRequests()
+	data, err := loadRequests()
 	if err != nil {
 		log.Printf("❌ Failed to load saved data: %v", err)
 		respondWithError(w, "Failed to load saved data", http.StatusInternalServerError)
@@ -1665,7 +1665,7 @@ func updateEnvironment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Load existing data
-	data, err := loadSavedRequests()
+	data, err := loadRequests()
 	if err != nil {
 		log.Printf("❌ Failed to load saved data: %v", err)
 		respondWithError(w, "Failed to load saved data", http.StatusInternalServerError)
@@ -1729,7 +1729,7 @@ func deleteEnvironment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Load existing data
-	data, err := loadSavedRequests()
+	data, err := loadRequests()
 	if err != nil {
 		log.Printf("❌ Failed to load saved data: %v", err)
 		respondWithError(w, "Failed to load saved data", http.StatusInternalServerError)
@@ -1809,7 +1809,7 @@ func copyEnvironment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Load existing data
-	data, err := loadSavedRequests()
+	data, err := loadRequests()
 	if err != nil {
 		log.Printf("❌ Failed to load saved data: %v", err)
 		respondWithError(w, "Failed to load saved data", http.StatusInternalServerError)
@@ -1877,7 +1877,7 @@ func activateEnvironment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Load existing data
-	data, err := loadSavedRequests()
+	data, err := loadRequests()
 	if err != nil {
 		log.Printf("❌ Failed to load saved data: %v", err)
 		respondWithError(w, "Failed to load saved data", http.StatusInternalServerError)
@@ -1923,7 +1923,7 @@ func groups(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := loadSavedRequests()
+	data, err := loadRequests()
 	if err != nil {
 		log.Printf("❌ Failed to load saved requests: %v", err)
 		respondWithError(w, "Failed to load saved requests", http.StatusInternalServerError)
@@ -1962,7 +1962,7 @@ func createGroup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Load existing data
-	data, err := loadSavedRequests()
+	data, err := loadRequests()
 	if err != nil {
 		log.Printf("❌ Failed to load saved requests: %v", err)
 		respondWithError(w, "Failed to load saved requests", http.StatusInternalServerError)
@@ -2017,7 +2017,7 @@ func deleteGroup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Load existing data
-	data, err := loadSavedRequests()
+	data, err := loadRequests()
 	if err != nil {
 		log.Printf("❌ Failed to load saved requests: %v", err)
 		respondWithError(w, "Failed to load saved requests", http.StatusInternalServerError)
@@ -2101,7 +2101,7 @@ func handleSaveWordWrap(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Load current data
-	data, err := loadSavedRequests()
+	data, err := loadRequests()
 	if err != nil {
 		log.Printf("❌ Failed to load data for word wrap update: %v", err)
 		respondWithError(w, "Failed to load data", http.StatusInternalServerError)
