@@ -15,11 +15,13 @@ A modern, lightweight REST API testing tool built with Go and Svelte. Test your 
 - **Request Grouping** - Organize requests into logical groups
 - **Search & Filter** - Search requests by name or URL, filter by groups
 - **Response Variables** - Reference data from previous requests using `{{ "Request Name".json_key }}` syntax
+- **JSON Object References** - Insert entire JSON objects/arrays as proper JSON (not escaped strings)
+- **Deep Field Traversal** - Access nested JSON properties using dot notation (e.g., `address.geo.lat`)
 - **Environment Variable References** - Reference system environment variables using `$ENV_VAR_NAME` syntax
 - **Auto-save** - Automatic saving of request changes with immediate parameter saving
 - **Request History** - View last response for each saved request
 - **Keyboard Shortcuts** - Send requests with `Cmd+Enter` (Mac) or `Ctrl+Enter` (Windows/Linux)
-- **Modal Previews** - Preview processed headers and body content in dedicated modals
+- **Modal Previews** - Preview processed headers and body content with JSON-aware substitution
 - **Request Duplication** - Quickly duplicate existing requests
 - **Request Renaming** - In-place editing of request names with unique name validation
 
@@ -125,12 +127,30 @@ Access data from previous request responses to create dynamic request chains:
    - Format: `{{ "Request Name".json_key }}`
    - Example: `{{ "Auth".access_token }}` extracts `access_token` from the "Auth" request response
 
-2. **Use Cases**
-   - Authentication tokens: `{{ "Login".token }}`
-   - Dynamic IDs: `{{ "Create User".user_id }}`
-   - Nested data: `{{ "User Profile".data.email }}`
+2. **Deep Field Traversal**
+   - Use dot notation to access nested JSON properties
+   - Format: `{{ "Request Name".parent.child.property }}`
+   - Example: `{{ "User Profile".address.geo.lat }}` extracts latitude from nested address object
 
-3. **Request Names**
+3. **JSON Object References**
+   - **Primitive Values**: `{{ "Request".user.name }}` → Returns `"John Doe"` (string)
+   - **JSON Objects**: `{{ "Request".user.address }}` → Returns `{"city": "New York", "zip": "10001"}` (actual JSON object)
+   - **Array Values**: `{{ "Request".user.tags }}` → Returns `["admin", "user"]` (actual JSON array)
+
+4. **Use Cases**
+   - **Authentication tokens**: `{{ "Login".token }}`
+   - **Dynamic IDs**: `{{ "Create User".user_id }}`
+   - **Nested primitive values**: `{{ "User Profile".data.email }}`
+   - **Nested coordinates**: `{{ "Location".address.geo.lat }}`
+   - **Complete objects**: `{{ "API Response".user }}` (inserts entire user object)
+   - **Sub-objects**: `{{ "API Response".user.preferences }}` (inserts preferences object)
+
+5. **Smart JSON Handling**
+   - When referencing objects, they are inserted as proper JSON (not escaped strings)
+   - Preview functionality shows actual JSON structure
+   - Compatible with all request body types (Text, JSON, Form)
+
+6. **Request Names**
    - Must be case-sensitive exact matches
    - Use quotes to handle names with spaces
    - Names must be unique across all requests

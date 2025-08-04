@@ -519,23 +519,29 @@ func parseResponseVariable(variable string) (*ResponseVariableRef, error) {
 	}, nil
 }
 
+// JSONFieldResult represents the result of extracting a JSON field
+type JSONFieldResult struct {
+	Value    string
+	IsObject bool // true if the extracted value is a JSON object/array
+}
+
 // extractJSONField extracts a field from JSON data using dot notation (e.g., "user.profile.email")
-func extractJSONField(data any, fieldPath string) (string, error) {
+func extractJSONField(data any, fieldPath string) (*JSONFieldResult, error) {
 	if data == nil {
-		return "", nil
+		return &JSONFieldResult{Value: "", IsObject: false}, nil
 	}
 
 	// If requesting full response, convert to string
 	if fieldPath == "response" {
 		if str, ok := data.(string); ok {
-			return str, nil
+			return &JSONFieldResult{Value: str, IsObject: false}, nil
 		}
 		// Convert JSON to string
 		jsonBytes, err := json.Marshal(data)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
-		return string(jsonBytes), nil
+		return &JSONFieldResult{Value: string(jsonBytes), IsObject: true}, nil
 	}
 
 	// For other fields, navigate the JSON structure
@@ -552,26 +558,33 @@ func extractJSONField(data any, fieldPath string) (string, error) {
 			if val, exists := v[part]; exists {
 				current = val
 			} else {
-				return "", nil // Field doesn't exist, return empty string
+				return &JSONFieldResult{Value: "", IsObject: false}, nil // Field doesn't exist, return empty string
 			}
 		default:
-			return "", nil // Can't traverse further, return empty string
+			return &JSONFieldResult{Value: "", IsObject: false}, nil // Can't traverse further, return empty string
 		}
 	}
 
-	// Convert final value to string
+	// Convert final value to string and determine if it's a JSON object
 	switch v := current.(type) {
 	case string:
-		return v, nil
+		return &JSONFieldResult{Value: v, IsObject: false}, nil
 	case nil:
-		return "", nil
-	default:
-		// Convert to JSON string for non-string types
+		return &JSONFieldResult{Value: "", IsObject: false}, nil
+	case map[string]any, []any:
+		// This is a JSON object or array
 		jsonBytes, err := json.Marshal(v)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
-		return string(jsonBytes), nil
+		return &JSONFieldResult{Value: string(jsonBytes), IsObject: true}, nil
+	default:
+		// Convert to JSON string for non-string primitive types (numbers, booleans, etc.)
+		jsonBytes, err := json.Marshal(v)
+		if err != nil {
+			return nil, err
+		}
+		return &JSONFieldResult{Value: string(jsonBytes), IsObject: false}, nil
 	}
 }
 
@@ -627,17 +640,8 @@ func processTemplate(input string, variables []Variable) (string, error) {
 		}
 	}
 
-	for _, match := range responseMatches {
-		if ref, err := parseResponseVariable(match); err == nil {
-			if request, err := loadSavedRequestByName(ref.RequestName); err == nil {
-				if request.LastResponse != nil {
-					if value, err := extractJSONField(request.LastResponse.Body, ref.FieldPath); err == nil {
-						result = strings.ReplaceAll(result, match, value)
-					}
-				}
-			}
-		}
-	}
+	// Handle response variables with JSON-aware substitution
+	result = processJSONAwareSubstitution(result, responseMatches)
 
 	// Then handle regular environment variables
 	for _, variable := range variables {
@@ -651,6 +655,57 @@ func processTemplate(input string, variables []Variable) (string, error) {
 	}
 
 	return result, nil
+}
+
+// processJSONAwareSubstitution performs JSON-aware substitution for response variables
+func processJSONAwareSubstitution(input string, responseMatches []string) string {
+	result := input
+
+	for _, match := range responseMatches {
+		ref, err := parseResponseVariable(match)
+		if err != nil {
+			continue
+		}
+
+		request, err := loadSavedRequestByName(ref.RequestName)
+		if err != nil {
+			continue
+		}
+
+		if request.LastResponse == nil {
+			continue
+		}
+
+		fieldResult, err := extractJSONField(request.LastResponse.Body, ref.FieldPath)
+		if err != nil {
+			continue
+		}
+
+		if fieldResult.IsObject {
+			// For JSON objects, perform JSON-aware substitution
+			result = substituteJSONObject(result, match, fieldResult.Value)
+		} else {
+			// For primitive values, use simple string replacement
+			result = strings.ReplaceAll(result, match, fieldResult.Value)
+		}
+	}
+
+	return result
+}
+
+// substituteJSONObject performs JSON-aware substitution of objects
+func substituteJSONObject(input, placeholder, jsonValue string) string {
+	// Check if the placeholder is within a JSON context (surrounded by quotes)
+	quotedPlaceholder := "\"" + placeholder + "\""
+
+	if strings.Contains(input, quotedPlaceholder) {
+		// The placeholder is quoted (e.g., "{{test.address}}"),
+		// replace the entire quoted placeholder with the raw JSON
+		return strings.ReplaceAll(input, quotedPlaceholder, jsonValue)
+	} else {
+		// The placeholder is not quoted, treat as regular string replacement
+		return strings.ReplaceAll(input, placeholder, jsonValue)
+	}
 }
 
 // processRequestTemplates applies variable substitution to all templated fields in a request

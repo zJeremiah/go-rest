@@ -93,8 +93,21 @@
       const processedFields = {};
       jsonFields.filter(f => f.enabled && f.key && f.key.trim()).forEach(field => {
         const processedKey = processTemplate(field.key.trim(), variables);
-        const processedValue = processTemplate(field.value || '', variables);
-        processedFields[processedKey] = processedValue;
+        let processedValue = processTemplate(field.value || '', variables);
+        
+        // Check if the processed value is a JSON object that should be parsed
+        if (typeof processedValue === 'string' && processedValue.trim().startsWith('{')) {
+          try {
+            // Try to parse as JSON object
+            const parsed = JSON.parse(processedValue);
+            processedFields[processedKey] = parsed;
+          } catch {
+            // If parsing fails, use as string
+            processedFields[processedKey] = processedValue;
+          }
+        } else {
+          processedFields[processedKey] = processedValue;
+        }
       });
       return JSON.stringify(processedFields, null, 2);
     } else if (bodyType === 'form') {
@@ -155,19 +168,8 @@
                  typeof input === 'object' && input !== null ? JSON.stringify(input) : 
                  String(input);
     
-    // First, handle response variables
-    const responseVarPattern = /\{\{[^}]*\}\}/g;
-    const allMatches = result.match(responseVarPattern) || [];
-    
-    for (const match of allMatches) {
-      // Check if this looks like a response variable (contains quotes)
-      if (match.includes('"') || match.includes('\\"')) {
-        const resolvedValue = resolveResponseVariable(match);
-        if (resolvedValue !== null) {
-          result = result.replace(match, resolvedValue);
-        }
-      }
-    }
+    // First, handle response variables with JSON-aware substitution
+    result = processJSONAwareSubstitution(result);
     
     // Then handle regular environment variables
     if (vars) {
@@ -182,6 +184,46 @@
     }
     
     return result;
+  }
+
+  // Frontend version of JSON-aware substitution
+  function processJSONAwareSubstitution(input) {
+    let result = input;
+    const responseVarPattern = /\{\{[^}]*\}\}/g;
+    const allMatches = result.match(responseVarPattern) || [];
+    
+    for (const match of allMatches) {
+      // Check if this looks like a response variable (contains quotes)
+      if (match.includes('"') || match.includes('\\"')) {
+        const fieldResult = resolveResponseVariable(match);
+        if (fieldResult !== null && fieldResult !== '') {
+          if (fieldResult.isObject) {
+            // For JSON objects, perform JSON-aware substitution
+            result = substituteJSONObject(result, match, fieldResult.value);
+          } else {
+            // For primitive values, use simple string replacement
+            result = result.replace(match, fieldResult.value);
+          }
+        }
+      }
+    }
+    
+    return result;
+  }
+
+  // Frontend version of JSON object substitution
+  function substituteJSONObject(input, placeholder, jsonValue) {
+    // Check if the placeholder is within a JSON context (surrounded by quotes)
+    const quotedPlaceholder = '"' + placeholder + '"';
+    
+    if (input.includes(quotedPlaceholder)) {
+      // The placeholder is quoted (e.g., "{{test.address}}"), 
+      // replace the entire quoted placeholder with the raw JSON
+      return input.replace(quotedPlaceholder, jsonValue);
+    } else {
+      // The placeholder is not quoted, treat as regular string replacement
+      return input.replace(placeholder, jsonValue);
+    }
   }
 
   // Resolve response variables like {{"RequestName".field}} or {{\"RequestName\".field}}
@@ -224,7 +266,8 @@
       }
       
       // Extract the field value
-      return extractFieldFromResponse(request.lastResponse.body, fieldPath);
+      const fieldResult = extractFieldFromResponse(request.lastResponse.body, fieldPath);
+      return fieldResult;
     } catch (error) {
       return null;
     }
@@ -232,14 +275,14 @@
 
   // Extract field from response body (client-side version)
   function extractFieldFromResponse(responseBody, fieldPath) {
-    if (!responseBody) return '';
+    if (!responseBody) return { value: '', isObject: false };
     
     // If requesting full response
     if (fieldPath === 'response') {
       if (typeof responseBody === 'string') {
-        return responseBody;
+        return { value: responseBody, isObject: false };
       }
-      return JSON.stringify(responseBody);
+      return { value: JSON.stringify(responseBody), isObject: true };
     }
     
     // Navigate JSON structure
@@ -252,17 +295,21 @@
       if (current && typeof current === 'object' && part in current) {
         current = current[part];
       } else {
-        return ''; // Field doesn't exist
+        return { value: '', isObject: false }; // Field doesn't exist
       }
     }
     
-    // Convert to string
+    // Return value with object type information
     if (typeof current === 'string') {
-      return current;
+      return { value: current, isObject: false };
     } else if (current === null || current === undefined) {
-      return '';
+      return { value: '', isObject: false };
+    } else if (typeof current === 'object' && current !== null) {
+      // This is a JSON object or array
+      return { value: JSON.stringify(current), isObject: true };
     } else {
-      return JSON.stringify(current);
+      // Primitive values (numbers, booleans, etc.)
+      return { value: JSON.stringify(current), isObject: false };
     }
   }
 
@@ -332,7 +379,8 @@
       }
       
       // Extract the field value for preview
-      const value = extractFieldFromResponse(request.lastResponse.body, fieldPath);
+      const fieldResult = extractFieldFromResponse(request.lastResponse.body, fieldPath);
+      const value = fieldResult ? fieldResult.value : '';
       const preview = value && value.length > 50 ? value.substring(0, 47) + '...' : value;
       
       return `${requestName}.${fieldPath}: ${preview || 'undefined'}`;

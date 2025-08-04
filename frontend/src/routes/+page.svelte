@@ -1749,7 +1749,6 @@
                 🚀 Send
               {/if}
             </button>
-            <span class="keyboard-hint">⌘+Enter</span>
           </div>
         </div>
       {:else}
