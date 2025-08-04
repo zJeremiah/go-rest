@@ -5,6 +5,7 @@ A modern, lightweight REST API testing tool built with Go and Svelte. Test your 
 ## 🚀 Features
 
 ### Core Functionality
+
 - **HTTP Request Testing** - Support for GET, POST, PUT, DELETE, PATCH, HEAD, and OPTIONS methods
 - **Request Collections** - Organize your API requests into named collections
 - **Environment Management** - Switch between different environments (dev, staging, prod, etc.)
@@ -12,6 +13,7 @@ A modern, lightweight REST API testing tool built with Go and Svelte. Test your 
 - **Response Display** - Beautiful syntax-highlighted JSON responses with copy functionality
 
 ### Advanced Features
+
 - **Request Grouping** - Organize requests into logical groups
 - **Search & Filter** - Search requests by name or URL, filter by groups
 - **Response Variables** - Reference data from previous requests using `{{ "Request Name".json_key }}` syntax
@@ -26,6 +28,7 @@ A modern, lightweight REST API testing tool built with Go and Svelte. Test your 
 - **Request Renaming** - In-place editing of request names with unique name validation
 
 ### Developer Experience
+
 - **Modern UI** - Clean, responsive Svelte-based frontend with dark theme support
 - **Smart Layout** - Optimized header bar with method, name, and URL input
 - **Real-time Updates** - Live request/response cycle with loading states
@@ -37,6 +40,7 @@ A modern, lightweight REST API testing tool built with Go and Svelte. Test your 
 ## 📦 Installation
 
 ### Prerequisites
+
 - **Go 1.24.3+** - [Download Go](https://golang.org/dl/)
 - **Node.js 18+** - [Download Node.js](https://nodejs.org/)
 - **npm** - Comes with Node.js
@@ -44,29 +48,34 @@ A modern, lightweight REST API testing tool built with Go and Svelte. Test your 
 ### Quick Start
 
 1. **Clone the repository**
+
    ```bash
    git clone <repository-url>
    cd go-rest
    ```
 
 2. **Install frontend dependencies**
+
    ```bash
    cd frontend
    npm install
    ```
 
 3. **Build the frontend**
+
    ```bash
    npm run build
    cd ..
    ```
 
 4. **Install Go dependencies**
+
    ```bash
    go mod download
    ```
 
 5. **Run the application**
+
    ```bash
    go run main.go
    ```
@@ -79,11 +88,13 @@ A modern, lightweight REST API testing tool built with Go and Svelte. Test your 
 ### Creating Your First Request
 
 1. **Add a New Request**
+
    - Click the "➕ Add Request" button
    - Enter a name for your request
    - Select or create a group
 
 2. **Configure the Request**
+
    - Enter the URL (supports template variables like `{{host}}/api/users`)
    - Select HTTP method (GET, POST, etc.)
    - Add headers in the Headers tab
@@ -100,22 +111,23 @@ A modern, lightweight REST API testing tool built with Go and Svelte. Test your 
 Environments allow you to switch between different sets of variables (e.g., dev vs production URLs).
 
 1. **Create an Environment**
+
    - Click the "⚙️" settings icon
    - Click "Create Environment"
    - Enter environment name and variables
 
 2. **Switch Environments**
+
    - Use the environment dropdown to switch between environments
    - All `{{variable}}` placeholders will be replaced with environment values
 
 3. **Environment Variables**
    - Format: `{{variable_name}}`
    - Example: `{{host}}/api/users` where `host` might be `https://api.example.com`
-   
 4. **Environment Variable References**
    - Reference system environment variables by prefixing variable values with `$`
    - Format: Set variable value to `$ENV_VAR_NAME`
-   - Example: Set `api_key` variable value to `$API_KEY` to reference the system's `API_KEY` environment variable  
+   - Example: Set `api_key` variable value to `$API_KEY` to reference the system's `API_KEY` environment variable
    - Use case: `Authorization: Bearer {{api_key}}` where `api_key` value is `$SECRET_TOKEN`
    - Benefits: Keep sensitive data out of configuration files, use system environment for dynamic values
 
@@ -124,20 +136,24 @@ Environments allow you to switch between different sets of variables (e.g., dev 
 Access data from previous request responses to create dynamic request chains:
 
 1. **Basic Syntax**
+
    - Format: `{{ "Request Name".json_key }}`
    - Example: `{{ "Auth".access_token }}` extracts `access_token` from the "Auth" request response
 
 2. **Deep Field Traversal**
+
    - Use dot notation to access nested JSON properties
    - Format: `{{ "Request Name".parent.child.property }}`
    - Example: `{{ "User Profile".address.geo.lat }}` extracts latitude from nested address object
 
 3. **JSON Object References**
+
    - **Primitive Values**: `{{ "Request".user.name }}` → Returns `"John Doe"` (string)
    - **JSON Objects**: `{{ "Request".user.address }}` → Returns `{"city": "New York", "zip": "10001"}` (actual JSON object)
    - **Array Values**: `{{ "Request".user.tags }}` → Returns `["admin", "user"]` (actual JSON array)
 
 4. **Use Cases**
+
    - **Authentication tokens**: `{{ "Login".token }}`
    - **Dynamic IDs**: `{{ "Create User".user_id }}`
    - **Nested primitive values**: `{{ "User Profile".data.email }}`
@@ -146,6 +162,7 @@ Access data from previous request responses to create dynamic request chains:
    - **Sub-objects**: `{{ "API Response".user.preferences }}` (inserts preferences object)
 
 5. **Smart JSON Handling**
+
    - When referencing objects, they are inserted as proper JSON (not escaped strings)
    - Preview functionality shows actual JSON structure
    - Compatible with all request body types (Text, JSON, Form)
@@ -181,13 +198,16 @@ The application supports the following environment variables:
 You can reference system environment variables in your template variables by prefixing the value with `$`:
 
 **Setup Example:**
+
 1. Set a system environment variable:
+
    ```bash
    export API_KEY="your-secret-api-key"
    export BASE_URL="https://api.production.com"
    ```
 
 2. Create template variables in your environment:
+
    - Variable name: `auth_token`, Value: `$API_KEY`
    - Variable name: `host`, Value: `$BASE_URL`
 
@@ -196,6 +216,7 @@ You can reference system environment variables in your template variables by pre
    - Header: `Authorization: Bearer {{auth_token}}`
 
 **Benefits:**
+
 - Keep sensitive data out of `saved_requests.json`
 - Use different values per deployment environment
 - Dynamic configuration without code changes
@@ -203,6 +224,7 @@ You can reference system environment variables in your template variables by pre
 ### Data Storage
 
 All data is stored locally in `saved_requests.json` in the project root. This file contains:
+
 - Request definitions with separate body types (Text, JSON, Form URL Encoded)
 - Response history for response variable references
 - Environment configurations with template variables (including `$ENV_VAR_NAME` references)
@@ -234,30 +256,32 @@ go-rest/
 
 ### Backend API Endpoints
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/proxy` | Proxy HTTP requests to external APIs |
-| GET | `/api/requests` | Get all saved requests |
-| POST | `/api/requests/save` | Save a new request |
-| PUT | `/api/requests/update` | Update an existing request |
-| DELETE | `/api/requests/delete` | Delete a request |
-| POST | `/api/requests/duplicate` | Duplicate a request |
-| GET | `/api/environments` | Get all environments |
-| POST | `/api/environments` | Create a new environment |
-| PUT | `/api/environments/{id}` | Update an environment |
-| DELETE | `/api/environments/{id}` | Delete an environment |
-| GET | `/api/groups` | Get all groups |
-| POST | `/api/groups` | Create a new group |
+| Method | Endpoint                  | Description                          |
+| ------ | ------------------------- | ------------------------------------ |
+| POST   | `/api/proxy`              | Proxy HTTP requests to external APIs |
+| GET    | `/api/requests`           | Get all saved requests               |
+| POST   | `/api/requests/save`      | Save a new request                   |
+| PUT    | `/api/requests/update`    | Update an existing request           |
+| DELETE | `/api/requests/delete`    | Delete a request                     |
+| POST   | `/api/requests/duplicate` | Duplicate a request                  |
+| GET    | `/api/environments`       | Get all environments                 |
+| POST   | `/api/environments`       | Create a new environment             |
+| PUT    | `/api/environments/{id}`  | Update an environment                |
+| DELETE | `/api/environments/{id}`  | Delete an environment                |
+| GET    | `/api/groups`             | Get all groups                       |
+| POST   | `/api/groups`             | Create a new group                   |
 
 ### Frontend Development
 
 1. **Start development server**
+
    ```bash
    cd frontend
    npm run dev
    ```
 
 2. **Build for production**
+
    ```bash
    npm run build
    ```
@@ -272,6 +296,7 @@ go-rest/
 The Go server serves the built frontend from `frontend/dist/` and provides API endpoints for request management.
 
 **Key Features:**
+
 - Chi router for HTTP routing
 - JSON-based data storage
 - CORS middleware
@@ -317,23 +342,28 @@ This project is open source. See the LICENSE file for details.
 ### Common Issues
 
 **Frontend not loading**
+
 - Ensure you've built the frontend: `cd frontend && npm run build`
 - Check that `frontend/dist/` directory exists
 
 **Requests failing**
+
 - Check CORS settings on the target API
 - Verify URL format and template variables
 - Check the browser console for errors
 
 **Data not persisting**
+
 - Ensure the application has write permissions in the project directory
 - Check if `saved_requests.json` is being created
 
 **Port already in use**
+
 - Change the port: `PORT=3000 go run main.go`
 - Kill existing processes using the port
 
 **Environment variables not resolving**
+
 - Ensure environment variables are set: `echo $YOUR_VAR_NAME`
 - Restart the application after setting new environment variables
 - Check variable names are exact matches (case-sensitive)
