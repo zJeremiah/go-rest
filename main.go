@@ -1,3 +1,30 @@
+// Postman-like API Tester
+//
+// This is a REST API server that provides a Postman-like interface for testing HTTP APIs.
+//
+// Key Features:
+// - Proxy HTTP requests to external APIs with full header/body support
+// - Save and organize API requests into groups
+// - Environment variable management for different contexts (dev, prod, etc.)
+// - Template processing with variable substitution ({{varName}})
+// - Response variable references like {{"RequestName".field}} for chaining requests
+// - Persistent storage in JSON file with data migration support
+// - Svelte frontend served as static files
+//
+// Architecture:
+// - Chi router with CORS and logging middleware
+// - JSON file storage with mutex-protected concurrent access
+// - Template engine supporting environment and response variables
+// - Migration system for backward compatibility
+//
+// API Endpoints:
+// - /api/proxy - Proxy requests to external APIs
+// - /api/requests/* - CRUD operations for saved requests
+// - /api/variables/* - Environment variable management
+// - /api/environments/* - Environment management
+// - /api/groups/* - Request grouping
+// - /api/settings/* - UI preferences
+
 package main
 
 import (
@@ -19,6 +46,11 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 )
 
+// =============================================================================
+// CORE DATA TYPES
+// =============================================================================
+
+// ProxyRequest represents an HTTP request to be proxied to an external API
 type ProxyRequest struct {
 	URL       string            `json:"url"`
 	Method    string            `json:"method"`
@@ -27,6 +59,7 @@ type ProxyRequest struct {
 	Variables []Variable        `json:"variables"`
 }
 
+// ProxyResponse represents the response from a proxied HTTP request
 type ProxyResponse struct {
 	Status     string            `json:"status"`
 	StatusCode int               `json:"statusCode"`
@@ -35,42 +68,47 @@ type ProxyResponse struct {
 	Error      string            `json:"error,omitempty"`
 }
 
+// SavedRequest represents a saved API request configuration
 type SavedRequest struct {
 	ID           string            `json:"id"`
 	Name         string            `json:"name"`
 	URL          string            `json:"url"`
 	Method       string            `json:"method"`
 	Headers      map[string]string `json:"headers"`
-	Body         any               `json:"body"`
-	BodyType     string            `json:"bodyType,omitempty"`
-	BodyText     string            `json:"bodyText,omitempty"`
-	BodyJson     []BodyField       `json:"bodyJson,omitempty"`
-	BodyForm     []BodyField       `json:"bodyForm,omitempty"`
+	Body         any               `json:"body"`               // Legacy field for backward compatibility
+	BodyType     string            `json:"bodyType,omitempty"` // Current body type (text, json, form)
+	BodyText     string            `json:"bodyText,omitempty"` // Raw text body
+	BodyJson     []BodyField       `json:"bodyJson,omitempty"` // JSON key-value pairs
+	BodyForm     []BodyField       `json:"bodyForm,omitempty"` // Form data
 	Params       []QueryParam      `json:"params"`
 	Group        string            `json:"group"`
 	Description  string            `json:"description"`
-	LastResponse *ProxyResponse    `json:"lastResponse,omitempty"`
+	LastResponse *ProxyResponse    `json:"lastResponse,omitempty"` // Cache last response for variable references
 	CreatedAt    string            `json:"createdAt"`
 	UpdatedAt    string            `json:"updatedAt"`
 }
 
+// QueryParam represents a URL query parameter
 type QueryParam struct {
 	Key     string `json:"key"`
 	Value   string `json:"value"`
 	Enabled bool   `json:"enabled"`
 }
 
+// BodyField represents a key-value pair for JSON or form data
 type BodyField struct {
 	Key     string `json:"key"`
 	Value   string `json:"value"`
 	Enabled bool   `json:"enabled"`
 }
 
+// Variable represents an environment variable for template substitution
 type Variable struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`
 }
 
+// Environment groups variables together for different contexts (dev, prod, etc.)
 type Environment struct {
 	ID        string     `json:"id"`
 	Name      string     `json:"name"`
@@ -79,6 +117,7 @@ type Environment struct {
 	UpdatedAt string     `json:"updatedAt"`
 }
 
+// Group organizes saved requests into categories
 type Group struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
@@ -86,54 +125,7 @@ type Group struct {
 	UpdatedAt string `json:"updatedAt"`
 }
 
-// parseJSON attempts to parse a string body as JSON, returning the parsed object or the original string
-func parseJSON(body any) any {
-	// If it's already not a string, return as-is
-	if body == nil {
-		return ""
-	}
-
-	bodyStr, ok := body.(string)
-	if !ok {
-		return body // Already parsed or not a string
-	}
-
-	// If empty string, return as-is
-	if strings.TrimSpace(bodyStr) == "" {
-		return bodyStr
-	}
-
-	// Try to parse as JSON
-	var jsonObj any
-	if err := json.Unmarshal([]byte(bodyStr), &jsonObj); err == nil {
-		// Successfully parsed as JSON, return the object
-		return jsonObj
-	}
-
-	// Not valid JSON, return original string
-	return bodyStr
-}
-
-// bodyToString converts a body (any) to string for HTTP requests
-func bodyToString(body any) string {
-	if body == nil {
-		return ""
-	}
-
-	// If it's already a string, return it
-	if bodyStr, ok := body.(string); ok {
-		return bodyStr
-	}
-
-	// If it's a JSON object, marshal it back to string
-	if jsonBytes, err := json.Marshal(body); err == nil {
-		return string(jsonBytes)
-	}
-
-	// Fallback: convert to string representation
-	return fmt.Sprintf("%v", body)
-}
-
+// SavedRequestsData is the main container for all application data
 type SavedRequestsData struct {
 	Requests           []SavedRequest `json:"requests"`
 	Variables          []Variable     `json:"variables"` // Legacy - kept for backward compatibility
@@ -143,53 +135,117 @@ type SavedRequestsData struct {
 	WordWrap           bool           `json:"wordWrap"`
 }
 
+// =============================================================================
+// UTILITY FUNCTIONS
+// =============================================================================
+
+// parseJSON attempts to parse a string body as JSON, returning the parsed object or the original string
+func parseJSON(body any) any {
+	if body == nil {
+		return ""
+	}
+
+	bodyStr, ok := body.(string)
+	if !ok {
+		return body // Already parsed or not a string
+	}
+
+	if strings.TrimSpace(bodyStr) == "" {
+		return bodyStr
+	}
+
+	// Try to parse as JSON
+	var jsonObj any
+	if err := json.Unmarshal([]byte(bodyStr), &jsonObj); err == nil {
+		return jsonObj
+	}
+
+	return bodyStr // Not valid JSON, return original string
+}
+
+// bodyToString converts a body (any) to string for HTTP requests
+func bodyToString(body any) string {
+	if body == nil {
+		return ""
+	}
+
+	if bodyStr, ok := body.(string); ok {
+		return bodyStr
+	}
+
+	if jsonBytes, err := json.Marshal(body); err == nil {
+		return string(jsonBytes)
+	}
+
+	return fmt.Sprintf("%v", body) // Fallback
+}
+
+// generateID creates a random ID for entities
+func generateID() string {
+	bytes := make([]byte, 8)
+	rand.Read(bytes)
+	return hex.EncodeToString(bytes)
+}
+
+// respondWithError sends a standardized error response
+func respondWithError(w http.ResponseWriter, message string, statusCode int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	json.NewEncoder(w).Encode(ProxyResponse{Error: message})
+}
+
+// =============================================================================
+// MAIN SERVER SETUP
+// =============================================================================
+
 func main() {
-	// Create a new chi router
 	r := chi.NewRouter()
 
 	// Global middleware
-	r.Use(corsMiddleware)
-	r.Use(loggingMiddleware)
-	r.Use(middleware.Recoverer) // Built-in chi middleware for panic recovery
+	r.Use(corsMiddleware, loggingMiddleware, middleware.Recoverer)
 
-	// API routes group
+	// API routes
 	r.Route("/api", func(r chi.Router) {
+		// Core functionality
 		r.Post("/proxy", proxy)
 		r.Get("/health", health)
+
+		// Request management
 		r.Get("/requests", requests)
 		r.Post("/requests/save", saveRequest)
 		r.Put("/requests/update", updateRequest)
 		r.Delete("/requests/delete", deleteRequest)
 		r.Post("/requests/duplicate", duplicateRequest)
+
+		// Variable management
 		r.Get("/variables", variables)
 		r.Post("/variables/save", saveVariables)
 
-		// Environment management endpoints
+		// Environment management
 		r.Get("/environments", environments)
 		r.Post("/environments", createEnvironment)
 		r.Put("/environments/{id}", updateEnvironment)
 		r.Delete("/environments/{id}", deleteEnvironment)
-
-		// Group management endpoints
-		r.Get("/groups", groups)
-		r.Post("/groups", createGroup)
-		r.Delete("/groups/{id}", deleteGroup)
 		r.Post("/environments/{id}/copy", copyEnvironment)
 		r.Post("/environments/{id}/activate", activateEnvironment)
 
-		// UI settings endpoints
+		// Group management
+		r.Get("/groups", groups)
+		r.Post("/groups", createGroup)
+		r.Delete("/groups/{id}", deleteGroup)
+
+		// Settings
 		r.Post("/settings/wordwrap", handleSaveWordWrap)
 	})
 
-	// Check if frontend/dist exists
+	// Serve frontend static files
 	if _, err := os.Stat("frontend/dist"); os.IsNotExist(err) {
 		log.Printf("⚠️  Warning: frontend/dist directory not found")
 		log.Printf("💡 Run 'cd frontend && npm run build' to build the frontend")
 	}
-
-	// Serve static files from frontend/dist directory
 	r.Handle("/*", http.FileServer(http.Dir("frontend/dist/")))
 
+	// Start server
 	port := "8333"
 	if p := os.Getenv("PORT"); p != "" {
 		port = p
@@ -203,8 +259,7 @@ func main() {
 
 	log.Printf("Server listening on port %s", port)
 
-	err := http.ListenAndServe(":"+port, r)
-	if err != nil {
+	if err := http.ListenAndServe(":"+port, r); err != nil {
 		log.Printf("❌ Server failed to start: %v", err)
 		fmt.Println("\nPress Enter to exit...")
 		fmt.Scanln()
@@ -212,14 +267,17 @@ func main() {
 	}
 }
 
-// corsMiddleware handles CORS headers
+// =============================================================================
+// MIDDLEWARE
+// =============================================================================
+
+// corsMiddleware handles CORS headers for frontend communication
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
-		// Handle preflight requests
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)
 			return
@@ -229,18 +287,15 @@ func corsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// loggingMiddleware logs HTTP requests
+// loggingMiddleware logs HTTP requests with timing
 func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-
-		// Create a response wrapper to capture status code
 		wrapped := &responseWrapper{ResponseWriter: w, statusCode: 200}
 
 		next.ServeHTTP(wrapped, r)
 
-		duration := time.Since(start)
-		log.Printf("📥 %s %s - %d - %v", r.Method, r.URL.Path, wrapped.statusCode, duration)
+		log.Printf("📥 %s %s - %d - %v", r.Method, r.URL.Path, wrapped.statusCode, time.Since(start))
 	})
 }
 
@@ -254,6 +309,10 @@ func (rw *responseWrapper) WriteHeader(code int) {
 	rw.ResponseWriter.WriteHeader(code)
 }
 
+// =============================================================================
+// CORE HANDLERS
+// =============================================================================
+
 // health provides a simple health check endpoint
 func health(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -263,7 +322,18 @@ func health(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// proxy handles requests to external APIs
+// proxy handles requests to external APIs with template processing
+//
+// This is the core functionality that:
+// 1. Accepts a ProxyRequest with URL, method, headers, body, and variables
+// 2. Applies template substitution using environment variables and response references
+// 3. Makes the HTTP request to the target API
+// 4. Returns the response with parsed JSON body when possible
+//
+// Template processing supports:
+// - Environment variables: {{varName}} -> resolved from current environment
+// - Response variables: {{"RequestName".field}} -> extracts field from saved response
+// - System environment variables: values starting with $ are resolved from OS env
 func proxy(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -414,44 +484,43 @@ func makeHTTPRequest(req ProxyRequest) ProxyResponse {
 	}
 }
 
+// =============================================================================
+// DATA PERSISTENCE
+// =============================================================================
+
 const requestsFileName = "saved_requests.json"
 
 // Mutex to prevent concurrent file access
 var fileAccessMutex sync.RWMutex
 
-// generateID creates a random ID for saved requests
-func generateID() string {
-	bytes := make([]byte, 8)
-	rand.Read(bytes)
-	return hex.EncodeToString(bytes)
-}
-
 // uniqueName creates a unique name by appending a counter if needed
 func uniqueName(baseName string, requests []SavedRequest) string {
-	uniqueName := baseName
+	candidateName := baseName
 	counter := 1
 
 	for {
-		// Check if this name is unique (case-sensitive)
 		isUnique := true
 		for _, req := range requests {
-			if req.Name == uniqueName {
+			if req.Name == candidateName {
 				isUnique = false
 				break
 			}
 		}
 
 		if isUnique {
-			return uniqueName
+			return candidateName
 		}
 
-		// Name is taken, try with counter
 		counter++
-		uniqueName = baseName + " (" + strconv.Itoa(counter) + ")"
+		candidateName = baseName + " (" + strconv.Itoa(counter) + ")"
 	}
 }
 
-// RespVarRef represents a parsed response variable reference
+// =============================================================================
+// TEMPLATE PROCESSING & VARIABLE SUBSTITUTION
+// =============================================================================
+
+// RespVarRef represents a parsed response variable reference like {{"RequestName".field}}
 type RespVarRef struct {
 	RequestName string
 	FieldPath   string
@@ -617,7 +686,8 @@ func resolveEnvVar(value string) string {
 	return value
 }
 
-// processTemplate applies variable substitution to a string using simple find/replace
+// processTemplate applies variable substitution to a string
+// Handles both response variables like {{"RequestName".field}} and environment variables like {{varName}}
 func processTemplate(input string, variables []Variable) (string, error) {
 	if input == "" {
 		return input, nil
@@ -625,30 +695,25 @@ func processTemplate(input string, variables []Variable) (string, error) {
 
 	result := input
 
-	// First, handle response variables
-	// Broader pattern to catch potential response variables for debugging
+	// Find all {{ }} patterns and separate response variables from regular variables
 	responseVarPattern := regexp.MustCompile(`\{\{[^}]*\}\}`)
 	allMatches := responseVarPattern.FindAllString(result, -1)
 
-	// Debug logging for response variables
 	var responseMatches []string
 	for _, match := range allMatches {
-		// Check if this looks like a response variable (contains quotes)
 		if strings.Contains(match, "\"") || strings.Contains(match, "\\\"") {
 			responseMatches = append(responseMatches, match)
 			log.Printf("Processing response variable: %q", match)
 		}
 	}
 
-	// Handle response variables with JSON-aware substitution
+	// Process response variables with JSON-aware substitution
 	result = processSubstitution(result, responseMatches)
 
-	// Then handle regular environment variables
+	// Process regular environment variables
 	for _, variable := range variables {
 		if variable.Key != "" {
-			// Resolve environment variable reference if value starts with $
 			resolvedValue := resolveEnvVar(variable.Value)
-			// Replace {{variableName}} with the resolved variable value
 			placeholder := fmt.Sprintf("{{%s}}", variable.Key)
 			result = strings.ReplaceAll(result, placeholder, resolvedValue)
 		}
@@ -710,48 +775,41 @@ func subJSONObject(input, placeholder, jsonValue string) string {
 
 // processTemplates applies variable substitution to all templated fields in a request
 func processTemplates(req ProxyRequest) ProxyRequest {
-	// Process URL
-	if processedURL, err := processTemplate(req.URL, req.Variables); err == nil {
-		req.URL = processedURL
-	} else {
-		log.Printf("⚠️  Template error in URL: %v", err)
+	// Helper function to safely process a template field
+	processField := func(fieldName, value string) string {
+		if processed, err := processTemplate(value, req.Variables); err == nil {
+			return processed
+		} else {
+			log.Printf("⚠️  Template error in %s: %v", fieldName, err)
+			return value
+		}
 	}
+
+	// Process URL
+	req.URL = processField("URL", req.URL)
 
 	// Process headers
 	processedHeaders := make(map[string]string)
 	for key, value := range req.Headers {
-		processedKey := key
-		processedValue := value
-
-		if newKey, err := processTemplate(key, req.Variables); err == nil {
-			processedKey = newKey
-		} else {
-			log.Printf("⚠️  Template error in header key '%s': %v", key, err)
-		}
-
-		if newValue, err := processTemplate(value, req.Variables); err == nil {
-			processedValue = newValue
-		} else {
-			log.Printf("⚠️  Template error in header value '%s': %v", value, err)
-		}
-
+		processedKey := processField("header key", key)
+		processedValue := processField("header value", value)
 		processedHeaders[processedKey] = processedValue
 	}
 	req.Headers = processedHeaders
 
 	// Process body
 	bodyStr := bodyToString(req.Body)
-	if processedBodyStr, err := processTemplate(bodyStr, req.Variables); err == nil {
-		// Parse the processed body as JSON if possible
-		req.Body = parseJSON(processedBodyStr)
-	} else {
-		log.Printf("⚠️  Template error in body: %v", err)
-	}
+	processedBodyStr := processField("body", bodyStr)
+	req.Body = parseJSON(processedBodyStr)
 
 	return req
 }
 
-// initEnv creates a default environment
+// =============================================================================
+// DATA MIGRATION & INITIALIZATION
+// =============================================================================
+
+// initEnv creates a default environment for new installations
 func initEnv(data *SavedRequestsData) *SavedRequestsData {
 	now := time.Now().Format(time.RFC3339)
 	defaultEnv := Environment{
@@ -1069,6 +1127,31 @@ func requests(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// =============================================================================
+// REQUEST MANAGEMENT HANDLERS
+// =============================================================================
+
+// Helper function to decode JSON request body with error handling
+func decodeJSONRequest(w http.ResponseWriter, r *http.Request, target interface{}) bool {
+	if err := json.NewDecoder(r.Body).Decode(target); err != nil {
+		log.Printf("❌ Invalid JSON request body: %v", err)
+		respondWithError(w, "Invalid request body", http.StatusBadRequest)
+		return false
+	}
+	return true
+}
+
+// Helper function to validate required fields for saved requests
+func validateSavedRequest(name, url string) error {
+	if name == "" {
+		return fmt.Errorf("request name is required")
+	}
+	if url == "" {
+		return fmt.Errorf("URL is required")
+	}
+	return nil
+}
+
 // saveRequest handles POST requests to save a new request
 func saveRequest(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -1092,23 +1175,21 @@ func saveRequest(w http.ResponseWriter, r *http.Request) {
 		LastResponse *ProxyResponse    `json:"lastResponse,omitempty"`
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Printf("❌ Invalid request body for save: %v", err)
-		respondWithError(w, "Invalid request body", http.StatusBadRequest)
+	if !decodeJSONRequest(w, r, &req) {
 		return
 	}
 
 	// Validate required fields
-	if req.Name == "" {
-		respondWithError(w, "Request name is required", http.StatusBadRequest)
+	if err := validateSavedRequest(req.Name, req.URL); err != nil {
+		respondWithError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if req.URL == "" {
-		respondWithError(w, "URL is required", http.StatusBadRequest)
-		return
-	}
+
 	if req.Method == "" {
 		req.Method = "GET"
+	}
+	if req.Group == "" {
+		req.Group = "default"
 	}
 
 	// Load existing requests
@@ -1117,11 +1198,6 @@ func saveRequest(w http.ResponseWriter, r *http.Request) {
 		log.Printf("❌ Failed to load saved requests: %v", err)
 		respondWithError(w, "Failed to load saved requests", http.StatusInternalServerError)
 		return
-	}
-
-	// Ensure default group if none provided
-	if req.Group == "" {
-		req.Group = "default"
 	}
 
 	// Check for duplicate names (case-sensitive)
@@ -2145,13 +2221,4 @@ func ensureDefaultGroup(data *SavedRequestsData) {
 	}
 
 	data.Groups = append(data.Groups, defaultGroup)
-}
-
-// respondWithError sends an error response
-func respondWithError(w http.ResponseWriter, message string, statusCode int) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(statusCode)
-	json.NewEncoder(w).Encode(ProxyResponse{
-		Error: message,
-	})
 }
