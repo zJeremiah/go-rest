@@ -34,7 +34,7 @@
   
   // Groups
   let groups = [];
-  let selectedGroup = typeof localStorage !== 'undefined' ? localStorage.getItem('lastSelectedGroup') || 'all' : 'all';
+  let selectedGroup = 'all'; // Start with 'all' to show everything initially
   let filteredRequests = [];
   let searchText = ''; // Search filter for request names and URLs
   let variableSearchText = ''; // Search filter for variables
@@ -1195,15 +1195,16 @@
     }
   }
 
-  // Auto-select the last selected group (validate it still exists)
+  // Auto-select the last selected group
   function autoSelectLastGroup() {
-    // If we already have a selected group from localStorage initialization, validate it
-    if (selectedGroup !== 'all' && groups.length > 0) {
-      // Check if the currently selected group still exists
-      if (!groups.some(g => g.name === selectedGroup)) {
-        // If the selected group doesn't exist anymore, fallback to 'all'
+    const lastSelectedGroup = localStorage.getItem('lastSelectedGroup');
+    if (lastSelectedGroup && groups.length > 0) {
+      // Check if the last selected group still exists (including 'all')
+      if (lastSelectedGroup === 'all' || groups.some(g => g.name === lastSelectedGroup)) {
+        selectedGroup = lastSelectedGroup;
+      } else {
+        // If the last selected group doesn't exist anymore, default to 'all'
         selectedGroup = 'all';
-        localStorage.setItem('lastSelectedGroup', 'all');
       }
     }
   }
@@ -2432,7 +2433,8 @@
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
-    /* Removed max-height and overflow-y to let collection section handle scrolling */
+    max-height: calc(100vh - 270px);
+    overflow-y: auto;
   }
 
   .variable-item {

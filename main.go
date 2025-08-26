@@ -35,6 +35,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"regexp"
 	"strconv"
@@ -55,7 +56,9 @@ type ProxyRequest struct {
 	URL       string            `json:"url"`
 	Method    string            `json:"method"`
 	Headers   map[string]string `json:"headers"`
-	Body      any               `json:"body"`
+	BodyType  string            `json:"bodyType"`           // Type of body: "text", "json", "form"
+	BodyJson  []BodyField       `json:"bodyJson"`           // Typed JSON fields
+	BodyForm  []BodyField       `json:"bodyForm,omitempty"` // Form fields
 	Variables []Variable        `json:"variables"`
 }
 
@@ -75,7 +78,6 @@ type SavedRequest struct {
 	URL          string            `json:"url"`
 	Method       string            `json:"method"`
 	Headers      map[string]string `json:"headers"`
-	Body         any               `json:"body"`               // Legacy field for backward compatibility
 	BodyType     string            `json:"bodyType,omitempty"` // Current body type (text, json, form)
 	BodyText     string            `json:"bodyText,omitempty"` // Raw text body
 	BodyJson     []BodyField       `json:"bodyJson,omitempty"` // JSON key-value pairs
@@ -99,7 +101,9 @@ type QueryParam struct {
 type BodyField struct {
 	Key     string `json:"key"`
 	Value   string `json:"value"`
+	Type    string `json:"type"` // "string", "int", "float", "boolean", "array", "object"
 	Enabled bool   `json:"enabled"`
+	Parent  string `json:"parent"` // Parent field key or "root" for top-level fields
 }
 
 // Variable represents an environment variable for template substitution
@@ -163,23 +167,6 @@ func parseJSON(body any) any {
 	return bodyStr // Not valid JSON, return original string
 }
 
-// bodyToString converts a body (any) to string for HTTP requests
-func bodyToString(body any) string {
-	if body == nil {
-		return ""
-	}
-
-	if bodyStr, ok := body.(string); ok {
-		return bodyStr
-	}
-
-	if jsonBytes, err := json.Marshal(body); err == nil {
-		return string(jsonBytes)
-	}
-
-	return fmt.Sprintf("%v", body) // Fallback
-}
-
 // generateID creates a random ID for entities
 func generateID() string {
 	bytes := make([]byte, 8)
@@ -192,6 +179,96 @@ func respondWithError(w http.ResponseWriter, message string, statusCode int) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 	json.NewEncoder(w).Encode(ProxyResponse{Error: message})
+}
+
+// =============================================================================
+// JSON PROCESSING FUNCTIONS
+// =============================================================================
+
+// convertTypedValue converts a string value to its proper type based on the type field
+func convertTypedValue(value, valueType string) any {
+	switch valueType {
+	case "string":
+		return value
+	case "int":
+		if i, err := strconv.ParseInt(value, 10, 64); err == nil {
+			return i
+		}
+		return int64(0) // Default fallback
+	case "float":
+		if f, err := strconv.ParseFloat(value, 64); err == nil {
+			return f
+		}
+		return 0.0 // Default fallback
+	case "boolean":
+		return strings.ToLower(strings.TrimSpace(value)) == "true"
+	case "array", "object":
+		return nil // These will be built recursively
+	default:
+		return value
+	}
+}
+
+// buildJSONFromBodyFields converts a flat list of BodyField entries into a JSON object
+func buildJSONFromBodyFields(fields []BodyField) (any, error) {
+	if len(fields) == 0 {
+		return map[string]any{}, nil
+	}
+
+	// Create a map of enabled fields by key for easy lookup
+	fieldMap := make(map[string]*BodyField)
+	for i := range fields {
+		if fields[i].Enabled && fields[i].Key != "" {
+			fieldMap[fields[i].Key] = &fields[i]
+		}
+	}
+
+	// Build the JSON structure recursively starting from root
+	return buildContainer("root", fieldMap), nil
+}
+
+// buildFormEncoded builds application/x-www-form-urlencoded string from BodyForm fields
+func buildFormEncoded(fields []BodyField) string {
+	values := url.Values{}
+	for _, f := range fields {
+		if !f.Enabled || f.Key == "" {
+			continue
+		}
+		values.Add(f.Key, f.Value)
+	}
+	return values.Encode()
+}
+
+// buildContainer builds a JSON container (object or array) by finding all fields with the given parent
+func buildContainer(parentKey string, fieldMap map[string]*BodyField) any {
+	result := make(map[string]any)
+
+	// Find all fields that have this parent
+	for _, field := range fieldMap {
+		if field.Parent == parentKey {
+			switch field.Type {
+			case "object", "array":
+				result[field.Key] = buildContainer(field.Key, fieldMap)
+			default:
+				// Regular field with a value
+				result[field.Key] = convertTypedValue(field.Value, field.Type)
+			}
+		}
+	}
+
+	// If this container is meant to be an array, convert map values to array
+	if parentKey != "root" {
+		// Check if the parent field is an array type
+		if parentField, exists := fieldMap[parentKey]; exists && parentField.Type == "array" {
+			var arrayItems []any
+			for _, value := range result {
+				arrayItems = append(arrayItems, value)
+			}
+			return arrayItems
+		}
+	}
+
+	return result
 }
 
 // =============================================================================
@@ -208,6 +285,8 @@ func main() {
 	r.Route("/api", func(r chi.Router) {
 		// Core functionality
 		r.Post("/proxy", proxy)
+		r.Post("/json/build", buildJSON)
+		r.Post("/form/build", buildForm)
 		r.Get("/health", health)
 
 		// Request management
@@ -322,6 +401,73 @@ func health(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// buildJSON builds JSON from typed body fields for preview purposes
+func buildJSON(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		BodyJson []BodyField `json:"bodyJson"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("❌ Invalid request body for buildJSON: %v", err)
+		respondWithError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Build JSON from typed fields
+	jsonObj, err := buildJSONFromBodyFields(req.BodyJson)
+	if err != nil {
+		log.Printf("❌ Failed to build JSON from body fields: %v", err)
+		respondWithError(w, fmt.Sprintf("Failed to build JSON: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	// Return the built JSON structure
+	w.Header().Set("Content-Type", "application/json")
+	response := map[string]any{
+		"json": jsonObj,
+		"jsonString": func() string {
+			if jsonBytes, err := json.MarshalIndent(jsonObj, "", "  "); err == nil {
+				return string(jsonBytes)
+			}
+			return ""
+		}(),
+	}
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("❌ Failed to encode buildJSON response: %v", err)
+	}
+}
+
+// buildForm builds x-www-form-urlencoded from form fields for preview purposes
+func buildForm(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		BodyForm []BodyField `json:"bodyForm"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("❌ Invalid request body for buildForm: %v", err)
+		respondWithError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	encoded := buildFormEncoded(req.BodyForm)
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]string{"formString": encoded}); err != nil {
+		log.Printf("❌ Failed to encode buildForm response: %v", err)
+	}
+}
+
 // proxy handles requests to external APIs with template processing
 //
 // This is the core functionality that:
@@ -416,7 +562,40 @@ func makeHTTPRequest(req ProxyRequest) ProxyResponse {
 	}()
 
 	var bodyReader io.Reader
-	bodyStr := bodyToString(req.Body)
+	var bodyStr string
+
+	// Build body based on type
+	if req.BodyType == "json" && len(req.BodyJson) > 0 {
+		// Build JSON from typed fields
+		jsonObj, err := buildJSONFromBodyFields(req.BodyJson)
+		if err != nil {
+			log.Printf("❌ Failed to build JSON from body fields: %v", err)
+			return ProxyResponse{
+				Error: fmt.Sprintf("Failed to build JSON body: %v", err),
+			}
+		}
+		jsonBytes, err := json.Marshal(jsonObj)
+		if err != nil {
+			log.Printf("❌ Failed to marshal JSON body: %v", err)
+			return ProxyResponse{
+				Error: fmt.Sprintf("Failed to marshal JSON body: %v", err),
+			}
+		}
+		bodyStr = string(jsonBytes)
+		log.Printf("🔧 Built JSON body from %d typed fields: %s", len(req.BodyJson), bodyStr)
+		// Ensure Content-Type if not set
+		if _, ok := req.Headers["Content-Type"]; !ok {
+			req.Headers["Content-Type"] = "application/json"
+		}
+	} else if req.BodyType == "form" && len(req.BodyForm) > 0 {
+		bodyStr = buildFormEncoded(req.BodyForm)
+		log.Printf("🔧 Built form body from %d fields: %s", len(req.BodyForm), bodyStr)
+		// Ensure Content-Type if not set
+		if _, ok := req.Headers["Content-Type"]; !ok {
+			req.Headers["Content-Type"] = "application/x-www-form-urlencoded"
+		}
+	}
+
 	if bodyStr != "" {
 		bodyReader = strings.NewReader(bodyStr)
 	}
@@ -798,9 +977,35 @@ func processTemplates(req ProxyRequest) ProxyRequest {
 	req.Headers = processedHeaders
 
 	// Process body
-	bodyStr := bodyToString(req.Body)
-	processedBodyStr := processField("body", bodyStr)
-	req.Body = parseJSON(processedBodyStr)
+	// If using typed JSON, process each BodyJson field's key/value/parent
+	if req.BodyType == "json" && len(req.BodyJson) > 0 {
+		processedJson := make([]BodyField, 0, len(req.BodyJson))
+		for _, f := range req.BodyJson {
+			if f.Key != "" {
+				f.Key = processField("json body key", f.Key)
+			}
+			if f.Value != "" {
+				f.Value = processField("json body value", f.Value)
+			}
+			if f.Parent != "" {
+				f.Parent = processField("json body parent", f.Parent)
+			}
+			processedJson = append(processedJson, f)
+		}
+		req.BodyJson = processedJson
+	} else if req.BodyType == "form" && len(req.BodyForm) > 0 {
+		processedForm := make([]BodyField, 0, len(req.BodyForm))
+		for _, f := range req.BodyForm {
+			if f.Key != "" {
+				f.Key = processField("form body key", f.Key)
+			}
+			if f.Value != "" {
+				f.Value = processField("form body value", f.Value)
+			}
+			processedForm = append(processedForm, f)
+		}
+		req.BodyForm = processedForm
+	}
 
 	return req
 }
@@ -825,78 +1030,6 @@ func initEnv(data *SavedRequestsData) *SavedRequestsData {
 	return data
 }
 
-// migrateDefaultGroup migrates requests without groups to default group
-func migrateDefaultGroup(data *SavedRequestsData) {
-	migratedCount := 0
-	for i := range data.Requests {
-		if data.Requests[i].Group == "" {
-			data.Requests[i].Group = "default"
-			migratedCount++
-		}
-	}
-	if migratedCount > 0 {
-		log.Printf("📦 Migrated %d requests to default group", migratedCount)
-	}
-}
-
-// migrateStringToJSON migrates string bodies to parsed JSON objects when possible
-func migrateStringToJSON(data *SavedRequestsData) {
-	migratedRequestBodies := 0
-	migratedResponseBodies := 0
-
-	for i := range data.Requests {
-		// Migrate request body - only migrate if it's currently a string that can be parsed as JSON
-		if data.Requests[i].Body != nil {
-			if bodyStr, ok := data.Requests[i].Body.(string); ok && strings.TrimSpace(bodyStr) != "" {
-				parsedBody := parseJSON(bodyStr)
-				// Check if parsing resulted in a different type (not a string)
-				if _, stillString := parsedBody.(string); !stillString {
-					data.Requests[i].Body = parsedBody
-					migratedRequestBodies++
-				}
-			}
-		}
-
-		// Migrate response body if it exists - only migrate if it's currently a string that can be parsed as JSON
-		if data.Requests[i].LastResponse != nil && data.Requests[i].LastResponse.Body != nil {
-			if bodyStr, ok := data.Requests[i].LastResponse.Body.(string); ok && strings.TrimSpace(bodyStr) != "" {
-				parsedBody := parseJSON(bodyStr)
-				// Check if parsing resulted in a different type (not a string)
-				if _, stillString := parsedBody.(string); !stillString {
-					data.Requests[i].LastResponse.Body = parsedBody
-					migratedResponseBodies++
-				}
-			}
-		}
-	}
-
-	if migratedRequestBodies > 0 || migratedResponseBodies > 0 {
-		log.Printf("🔄 Migrated %d request bodies and %d response bodies from strings to JSON objects",
-			migratedRequestBodies, migratedResponseBodies)
-	}
-}
-
-// migrateVarsToEnvs migrates legacy variables to default environment
-func migrateVarsToEnvs(data *SavedRequestsData) *SavedRequestsData {
-	now := time.Now().Format(time.RFC3339)
-	defaultEnv := Environment{
-		ID:        generateID(),
-		Name:      "Default",
-		Variables: make([]Variable, len(data.Variables)),
-		CreatedAt: now,
-		UpdatedAt: now,
-	}
-
-	// Copy legacy variables to default environment
-	copy(defaultEnv.Variables, data.Variables)
-
-	data.Environments = []Environment{defaultEnv}
-	data.CurrentEnvironment = defaultEnv.ID
-
-	log.Printf("📦 Migrated %d variables to Default environment", len(data.Variables))
-	return data
-}
-
 // getCurrentEnvironment returns the current active environment
 func getCurrentEnvironment(data *SavedRequestsData) (*Environment, error) {
 	if data.CurrentEnvironment == "" && len(data.Environments) > 0 {
@@ -910,39 +1043,6 @@ func getCurrentEnvironment(data *SavedRequestsData) (*Environment, error) {
 	}
 
 	return nil, fmt.Errorf("current environment not found")
-}
-
-// dedupRequestNames ensures all request names are unique by adding suffixes to duplicates
-// Returns true if any changes were made
-func dedupRequestNames(data *SavedRequestsData) bool {
-	seenNames := make(map[string]bool)
-	hasChanges := false
-
-	for i := range data.Requests {
-		originalName := data.Requests[i].Name
-		candidateName := originalName
-		counter := 1
-
-		// Keep trying names until we find one that hasn't been used
-		for {
-			if !seenNames[candidateName] {
-				// This name is available
-				if candidateName != originalName {
-					log.Printf("🔧 Renamed duplicate request '%s' to '%s'", originalName, candidateName)
-					data.Requests[i].Name = candidateName
-					hasChanges = true
-				}
-				seenNames[candidateName] = true
-				break
-			}
-
-			// Name is taken, try with counter
-			counter++
-			candidateName = originalName + " (" + strconv.Itoa(counter) + ")"
-		}
-	}
-
-	return hasChanges
 }
 
 // loadRequests reads saved requests from JSON file
@@ -981,7 +1081,7 @@ func loadRequests() (*SavedRequestsData, error) {
 		return data, nil
 	}
 
-	// Ensure variables array is not nil (backward compatibility)
+	// Ensure variables array is not nil
 	if data.Variables == nil {
 		data.Variables = []Variable{}
 	}
@@ -989,11 +1089,6 @@ func loadRequests() (*SavedRequestsData, error) {
 	// Ensure environments array is not nil
 	if data.Environments == nil {
 		data.Environments = []Environment{}
-	}
-
-	// Migration: If we have legacy variables but no environments, migrate them
-	if len(data.Variables) > 0 && len(data.Environments) == 0 {
-		data = migrateVarsToEnvs(data)
 	}
 
 	// Ensure we have at least a default environment
@@ -1013,26 +1108,6 @@ func loadRequests() (*SavedRequestsData, error) {
 
 	// Ensure default group exists
 	ensureDefaultGroup(data)
-
-	// Migrate existing requests without groups to default group
-	migrateDefaultGroup(data)
-
-	// Migrate string bodies to parsed JSON objects when possible
-	migrateStringToJSON(data)
-
-	// Ensure all request names are unique (fix manual edits or data corruption)
-	hasNameChanges := dedupRequestNames(data)
-
-	// If we made changes to deduplicate names, save the corrected data
-	if hasNameChanges {
-		// Temporarily release read lock to allow write lock for saving
-		fileAccessMutex.RUnlock()
-		log.Printf("💾 Saving deduplicated request names to file")
-		if err := saveSavedRequests(data); err != nil {
-			log.Printf("⚠️  Failed to save deduplicated names: %v", err)
-		}
-		fileAccessMutex.RLock() // Re-acquire read lock for consistency
-	}
 
 	return data, nil
 }
@@ -1216,7 +1291,6 @@ func saveRequest(w http.ResponseWriter, r *http.Request) {
 		URL:          req.URL,
 		Method:       req.Method,
 		Headers:      req.Headers,
-		Body:         parseJSON(req.Body), // Set legacy body field only for new requests
 		BodyType:     req.BodyType,
 		BodyText:     req.BodyText,
 		BodyJson:     req.BodyJson,
@@ -1254,47 +1328,46 @@ func updateRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req struct {
-		ID           string            `json:"id"`
-		Name         string            `json:"name"`
-		URL          string            `json:"url"`
-		Method       string            `json:"method"`
-		Headers      map[string]string `json:"headers"`
-		Body         any               `json:"body"`
-		BodyType     string            `json:"bodyType,omitempty"`
-		BodyText     string            `json:"bodyText,omitempty"`
-		BodyJson     []BodyField       `json:"bodyJson,omitempty"`
-		BodyForm     []BodyField       `json:"bodyForm,omitempty"`
-		Params       []QueryParam      `json:"params"`
-		Group        string            `json:"group"`
-		Description  string            `json:"description"`
-		LastResponse *ProxyResponse    `json:"lastResponse,omitempty"`
+	type UpdatePayload struct {
+		ID           string             `json:"id"`
+		Name         *string            `json:"name,omitempty"`
+		URL          *string            `json:"url,omitempty"`
+		Method       *string            `json:"method,omitempty"`
+		Headers      *map[string]string `json:"headers,omitempty"`
+		BodyType     *string            `json:"bodyType,omitempty"`
+		BodyText     *string            `json:"bodyText,omitempty"`
+		BodyJson     *[]BodyField       `json:"bodyJson,omitempty"`
+		BodyForm     *[]BodyField       `json:"bodyForm,omitempty"`
+		Params       *[]QueryParam      `json:"params,omitempty"`
+		Group        *string            `json:"group,omitempty"`
+		Description  *string            `json:"description,omitempty"`
+		LastResponse *ProxyResponse     `json:"lastResponse,omitempty"`
 	}
 
+	var req UpdatePayload
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Printf("❌ Invalid request body for update: %v", err)
 		respondWithError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
-	fmt.Println(req)
-	// Validate required fields
+
+	// Validate required identifier
 	if req.ID == "" {
 		respondWithError(w, "Request ID is required", http.StatusBadRequest)
 		return
 	}
-	if req.Name == "" {
-		respondWithError(w, "Request name is required", http.StatusBadRequest)
+	// Validate if present
+	if req.Name != nil && *req.Name == "" {
+		respondWithError(w, "Request name cannot be empty", http.StatusBadRequest)
 		return
 	}
-	if req.URL == "" {
-		respondWithError(w, "URL is required", http.StatusBadRequest)
+	if req.URL != nil && *req.URL == "" {
+		respondWithError(w, "URL cannot be empty", http.StatusBadRequest)
 		return
 	}
-	if req.Method == "" {
-		req.Method = "GET"
-	}
-	if req.Group == "" {
-		req.Group = "default"
+	if req.Group != nil && *req.Group == "" {
+		respondWithError(w, "Group cannot be empty", http.StatusBadRequest)
+		return
 	}
 
 	// Load existing requests
@@ -1306,10 +1379,12 @@ func updateRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check for duplicate names (case-sensitive, excluding the current request)
-	for _, existing := range data.Requests {
-		if existing.ID != req.ID && existing.Name == req.Name {
-			respondWithError(w, fmt.Sprintf("Request name '%s' already exists. Please choose a different name.", req.Name), http.StatusConflict)
-			return
+	if req.Name != nil {
+		for _, existing := range data.Requests {
+			if existing.ID != req.ID && existing.Name == *req.Name {
+				respondWithError(w, fmt.Sprintf("Request name '%s' already exists. Please choose a different name.", *req.Name), http.StatusConflict)
+				return
+			}
 		}
 	}
 
@@ -1317,19 +1392,39 @@ func updateRequest(w http.ResponseWriter, r *http.Request) {
 	found := false
 	for i, existing := range data.Requests {
 		if existing.ID == req.ID {
-			// Update all fields including separate body types
-			data.Requests[i].Name = req.Name
-			data.Requests[i].URL = req.URL
-			data.Requests[i].Method = req.Method
-			data.Requests[i].Headers = req.Headers
-			data.Requests[i].Body = parseJSON(req.Body) // Update legacy body with active type
-			data.Requests[i].BodyType = req.BodyType
-			data.Requests[i].BodyText = req.BodyText
-			data.Requests[i].BodyJson = req.BodyJson
-			data.Requests[i].BodyForm = req.BodyForm
-			data.Requests[i].Params = req.Params
-			data.Requests[i].Group = req.Group
-			data.Requests[i].Description = req.Description
+			if req.Name != nil {
+				data.Requests[i].Name = *req.Name
+			}
+			if req.URL != nil {
+				data.Requests[i].URL = *req.URL
+			}
+			if req.Method != nil {
+				data.Requests[i].Method = *req.Method
+			}
+			if req.Headers != nil {
+				data.Requests[i].Headers = *req.Headers
+			}
+			if req.BodyType != nil {
+				data.Requests[i].BodyType = *req.BodyType
+			}
+			if req.BodyText != nil {
+				data.Requests[i].BodyText = *req.BodyText
+			}
+			if req.BodyJson != nil {
+				data.Requests[i].BodyJson = *req.BodyJson
+			}
+			if req.BodyForm != nil {
+				data.Requests[i].BodyForm = *req.BodyForm
+			}
+			if req.Params != nil {
+				data.Requests[i].Params = *req.Params
+			}
+			if req.Group != nil {
+				data.Requests[i].Group = *req.Group
+			}
+			if req.Description != nil {
+				data.Requests[i].Description = *req.Description
+			}
 			if req.LastResponse != nil {
 				data.Requests[i].LastResponse = req.LastResponse
 			}
@@ -1350,8 +1445,6 @@ func updateRequest(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, "Failed to save updated request", http.StatusInternalServerError)
 		return
 	}
-
-	log.Printf("✅ Updated request: %s (%s %s)", req.Name, req.Method, req.URL)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "updated"})
@@ -1474,7 +1567,6 @@ func duplicateRequest(w http.ResponseWriter, r *http.Request) {
 		URL:          originalRequest.URL,
 		Method:       originalRequest.Method,
 		Headers:      make(map[string]string),
-		Body:         originalRequest.Body,
 		BodyType:     originalRequest.BodyType,
 		BodyText:     originalRequest.BodyText,
 		BodyJson:     make([]BodyField, len(originalRequest.BodyJson)),

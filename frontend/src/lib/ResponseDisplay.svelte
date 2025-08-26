@@ -174,17 +174,17 @@
           }
         } else {
           // Content is NOT JSON (error messages, plain text, etc.)
-          // Display as readable text without any highlighting
+          // Display as plain dark text without any highlighting
           if (codeElement) {
             codeElement.textContent = bodyString;
             // Remove any highlight.js classes and add plain text class
             codeElement.className = 'plain-text';
-            // Let CSS custom properties handle theming - don't set inline colors
+            codeElement.style.color = '#212529';
             codeElement.style.backgroundColor = 'transparent';
           } else {
             responseBodyElement.textContent = bodyString;
             responseBodyElement.className = 'plain-text';
-            // Let CSS custom properties handle theming - don't set inline colors
+            responseBodyElement.style.color = '#212529';
             responseBodyElement.style.backgroundColor = 'transparent';
           }
         }
@@ -199,12 +199,12 @@
         if (codeElement) {
           codeElement.textContent = textContent;
           codeElement.className = 'plain-text';
-          // Let CSS custom properties handle theming - don't set inline colors
+          codeElement.style.color = '#212529';
           codeElement.style.backgroundColor = 'transparent';
         } else {
           responseBodyElement.textContent = textContent;
           responseBodyElement.className = 'plain-text';
-          // Let CSS custom properties handle theming - don't set inline colors
+          responseBodyElement.style.color = '#212529';
           responseBodyElement.style.backgroundColor = 'transparent';
         }
       }
@@ -723,27 +723,27 @@
   }
 
   .header-item span {
-    color: var(--text-secondary) !important;
+    color: #212529 !important;
     word-break: break-all;
     flex: 1;
   }
 
-  /* Ensure plain text responses use theme colors */
+  /* Ensure plain text responses are always readable */
   .response-body pre,
   .response-body code {
-    color: var(--text-primary);
-    background: var(--bg-primary);
+    color: #212529;
+    background: #f8f9fa;
   }
 
   /* Override any highlight.js styles for plain text */
   .response-body code:not(.hljs) {
-    color: var(--text-primary) !important;
+    color: #212529 !important;
     background: transparent !important;
   }
 
-  /* Specific styling for plain text content (error messages, CSV, etc.) */
+  /* Specific styling for plain text content (error messages, etc.) */
   .plain-text {
-    color: var(--text-primary) !important;
+    color: #212529 !important;
     background: transparent !important;
     font-family: 'Consolas', 'Monaco', 'Courier New', monospace !important;
     white-space: pre-wrap !important;

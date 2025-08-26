@@ -23,7 +23,7 @@
   $: if (selectedRequest && selectedRequest.method !== undefined && method !== selectedRequest.method) {
     method = selectedRequest.method;
   }
-  let jsonFields = [{ key: '', value: '', enabled: true }];
+  let jsonFields = [{ key: '', value: '', type: 'string', enabled: true, parent: 'root' }];
   let formFields = [{ key: '', value: '', enabled: true }];
   let description = '';
   let activeTab = 'headers';
@@ -86,30 +86,33 @@
 
 
   // Build body with variable substitution for preview
-  function buildBodyPreview() {
+  async function buildBodyPreview() {
     if (bodyType === 'text') {
       return processTemplate(body, variables);
     } else if (bodyType === 'json') {
-      const processedFields = {};
-      jsonFields.filter(f => f.enabled && f.key && f.key.trim()).forEach(field => {
-        const processedKey = processTemplate(field.key.trim(), variables);
-        let processedValue = processTemplate(field.value || '', variables);
+      // Use backend API to build JSON from typed fields
+      try {
+        const response = await fetch('/api/json/build', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            bodyJson: jsonFields.filter(f => f.key && f.key.trim())
+          })
+        });
         
-        // Check if the processed value is a JSON object that should be parsed
-        if (typeof processedValue === 'string' && processedValue.trim().startsWith('{')) {
-          try {
-            // Try to parse as JSON object
-            const parsed = JSON.parse(processedValue);
-            processedFields[processedKey] = parsed;
-          } catch {
-            // If parsing fails, use as string
-            processedFields[processedKey] = processedValue;
-          }
+        if (response.ok) {
+          const result = await response.json();
+          return result.jsonString || '{}';
         } else {
-          processedFields[processedKey] = processedValue;
+          console.error('Failed to build JSON preview:', response.statusText);
+          return '{}';
         }
-      });
-      return JSON.stringify(processedFields, null, 2);
+      } catch (error) {
+        console.error('Error building JSON preview:', error);
+        return '{}';
+      }
     } else if (bodyType === 'form') {
       const processedForm = {};
       formFields.filter(f => f.enabled && f.key && f.key.trim()).forEach(field => {
@@ -135,7 +138,7 @@
   }
 
   // Open preview modal
-  function openPreviewModal(type) {
+  async function openPreviewModal(type) {
     previewModalType = type;
     
     if (type === 'headers') {
@@ -143,12 +146,21 @@
       previewModalContent = buildHeadersPreview();
     } else if (type === 'body') {
       previewModalTitle = 'Preview Request Body';
-      const bodyPreview = buildBodyPreview();
-      if (typeof bodyPreview === 'string') {
-        previewModalContent = { '_raw_': bodyPreview };
-      } else {
-        previewModalContent = bodyPreview;
+      previewModalContent = { '_loading_': 'Building JSON preview...' };
+      showPreviewModal = true; // Show modal first with loading message
+      
+      try {
+        const bodyPreview = await buildBodyPreview();
+        if (typeof bodyPreview === 'string') {
+          previewModalContent = { '_raw_': bodyPreview };
+        } else {
+          previewModalContent = bodyPreview;
+        }
+      } catch (error) {
+        console.error('Error building body preview:', error);
+        previewModalContent = { '_error_': 'Failed to build JSON preview' };
       }
+      return; // Exit early since we already showed the modal
     }
     
     showPreviewModal = true;
@@ -419,11 +431,30 @@
 
   // JSON field management
   function addJsonField() {
-    jsonFields = [...jsonFields, { key: '', value: '', enabled: true }];
+    jsonFields = [...jsonFields, { key: '', value: '', type: 'string', enabled: true, parent: 'root' }];
   }
 
   function removeJsonField(index) {
     jsonFields = jsonFields.filter((_, i) => i !== index);
+  }
+
+  // Get available parent options for a field at a given index
+  function getAvailableParents(currentIndex) {
+    const parents = [{ key: 'root', label: 'Root Level' }];
+    
+    // Add all object/array fields that come before this field
+    for (let i = 0; i < currentIndex; i++) {
+      const field = jsonFields[i];
+      if (field.enabled && field.key && field.key.trim() && 
+          (field.type === 'object' || field.type === 'array')) {
+        parents.push({
+          key: field.key,
+          label: `${field.key} (${field.type})`
+        });
+      }
+    }
+    
+    return parents;
   }
 
   // Form field management
@@ -435,27 +466,13 @@
     formFields = formFields.filter((_, i) => i !== index);
   }
 
-  // Build body content based on type
+  // Build body content based on type (for JSON, backend will handle the building)
   function buildBodyContent() {
     switch (bodyType) {
       case 'json':
-        const jsonObj = {};
-        jsonFields.filter(f => f.enabled && f.key && f.key.trim()).forEach(field => {
-          const processedKey = processTemplate(field.key.trim(), variables);
-          let processedValue = processTemplate(field.value || '', variables);
-          
-          // Try to parse the processed value as JSON if it looks like JSON
-          try {
-            if (processedValue && (processedValue.startsWith('{') || processedValue.startsWith('[') || processedValue === 'true' || processedValue === 'false' || processedValue === 'null' || !isNaN(processedValue))) {
-              processedValue = JSON.parse(processedValue);
-            }
-          } catch (e) {
-            // Keep as string if not valid JSON
-          }
-          
-          jsonObj[processedKey] = processedValue;
-        });
-        return JSON.stringify(jsonObj, null, 2);
+        // For JSON, we'll let the backend build it from BodyJson fields
+        // This is only used for legacy body field compatibility
+        return body || '';
       
       case 'form':
         const formData = new URLSearchParams();
@@ -476,23 +493,8 @@
   function buildRawBodyContent() {
     switch (bodyType) {
       case 'json':
-        const jsonObj = {};
-        jsonFields.filter(f => f.enabled && f.key && f.key.trim()).forEach(field => {
-          const key = field.key.trim();
-          let value = field.value || '';
-          
-          // Try to parse the value as JSON if it looks like JSON (but don't process templates)
-          try {
-            if (value && (value.startsWith('{') || value.startsWith('[') || value === 'true' || value === 'false' || value === 'null' || !isNaN(value))) {
-              value = JSON.parse(value);
-            }
-          } catch (e) {
-            // Keep as string if not valid JSON
-          }
-          
-          jsonObj[key] = value;
-        });
-        return JSON.stringify(jsonObj, null, 2);
+        // For JSON, backend will build from BodyJson fields
+        return body || '';
       
       case 'form':
         const formData = new URLSearchParams();
@@ -795,6 +797,8 @@
       method,
       headers: parsedHeaders,
       body: finalBodyContent,
+      bodyType: bodyType,
+      bodyJson: jsonFields.filter(f => f.key && f.key.trim()),
       params: params.filter(p => p.key && p.key.trim())
     };
     
@@ -920,7 +924,15 @@
       // New format: separate storage for each body type
       bodyType = data.bodyType || 'text';
       body = data.bodyText || '';
-      jsonFields = data.bodyJson && data.bodyJson.length > 0 ? data.bodyJson : [{ key: '', value: '', enabled: true }];
+       jsonFields = data.bodyJson && data.bodyJson.length > 0 ? 
+         data.bodyJson.map(field => ({
+           key: field.key || '',
+           value: field.value || '',
+           type: field.type || 'string',
+           enabled: field.enabled !== undefined ? field.enabled : true,
+           parent: field.parent || 'root'
+         })) : 
+         [{ key: '', value: '', type: 'string', enabled: true, parent: 'root' }];
       formFields = data.bodyForm && data.bodyForm.length > 0 ? data.bodyForm : [{ key: '', value: '', enabled: true }];
     } else {
       // Legacy format: detect body type and parse from single body field
@@ -952,7 +964,7 @@
             formFields = [{ key: '', value: '', enabled: true }]; // Reset form fields
           } else {
             bodyType = 'text';
-            jsonFields = [{ key: '', value: '', enabled: true }]; // Reset JSON fields
+            jsonFields = [{ key: '', value: '', type: 'string', enabled: true, parent: 'root' }]; // Reset JSON fields
             formFields = [{ key: '', value: '', enabled: true }]; // Reset form fields
           }
         } catch (e) {
@@ -967,21 +979,21 @@
                 value,
                 enabled: true
               }));
-              jsonFields = [{ key: '', value: '', enabled: true }]; // Reset JSON fields
+              jsonFields = [{ key: '', value: '', type: 'string', enabled: true, parent: 'root' }]; // Reset JSON fields
             } else {
               bodyType = 'text';
-              jsonFields = [{ key: '', value: '', enabled: true }]; // Reset JSON fields
+              jsonFields = [{ key: '', value: '', type: 'string', enabled: true, parent: 'root' }]; // Reset JSON fields
               formFields = [{ key: '', value: '', enabled: true }]; // Reset form fields
             }
           } catch (e) {
             bodyType = 'text';
-            jsonFields = [{ key: '', value: '', enabled: true }]; // Reset JSON fields
+            jsonFields = [{ key: '', value: '', type: 'string', enabled: true, parent: 'root' }]; // Reset JSON fields
             formFields = [{ key: '', value: '', enabled: true }]; // Reset form fields
           }
         }
       } else {
         bodyType = 'text';
-        jsonFields = [{ key: '', value: '', enabled: true }];
+        jsonFields = [{ key: '', value: '', type: 'string', enabled: true, parent: 'root' }];
         formFields = [{ key: '', value: '', enabled: true }];
       }
     }
@@ -1391,13 +1403,59 @@
                   class="field-input field-key {analyzeVariables(field.key, variables, savedRequests).hasVariables ? 'has-variables' : ''}"
                   title={analyzeVariables(field.key, variables, savedRequests).hasVariables ? analyzeVariables(field.key, variables, savedRequests).tooltip : ''}
                 />
-                <input 
-                  type="text" 
-                  bind:value={field.value}
-                  placeholder="Value"
-                  class="field-input field-value {analyzeVariables(field.value, variables, savedRequests).hasVariables ? 'has-variables' : ''}"
-                  title={analyzeVariables(field.value, variables, savedRequests).hasVariables ? analyzeVariables(field.value, variables, savedRequests).tooltip : ''}
-                />
+                <select bind:value={field.type} class="field-type-select">
+                  <option value="string">String</option>
+                  <option value="int">Int</option>
+                  <option value="float">Float</option>
+                  <option value="boolean">Boolean</option>
+                  <option value="object">Object</option>
+                  <option value="array">Array</option>
+                </select>
+                {#if field.type === 'boolean'}
+                  <select bind:value={field.value} class="field-input field-value">
+                    <option value="true">true</option>
+                    <option value="false">false</option>
+                  </select>
+                {:else if field.type === 'int'}
+                  <input 
+                    type="number" 
+                    step="1" 
+                    bind:value={field.value}
+                    placeholder="0"
+                    class="field-input field-value"
+                  />
+                {:else if field.type === 'float'}
+                  <input 
+                    type="number" 
+                    step="any"
+                    bind:value={field.value}
+                    placeholder="0.0"
+                    class="field-input field-value"
+                  />
+                {:else if field.type === 'object' || field.type === 'array'}
+                  <div class="nested-field-indicator">
+                    {field.type === 'object' ? '{ object }' : '[ array ]'}
+                  </div>
+                {:else}
+                  <input 
+                    type="text" 
+                    bind:value={field.value}
+                    placeholder="Value"
+                    class="field-input field-value {analyzeVariables(field.value, variables, savedRequests).hasVariables ? 'has-variables' : ''}"
+                    title={analyzeVariables(field.value, variables, savedRequests).hasVariables ? analyzeVariables(field.value, variables, savedRequests).tooltip : ''}
+                  />
+                {/if}
+                
+                <select 
+                  bind:value={field.parent}
+                  class="field-parent-select"
+                  title="Select the parent container for this field"
+                >
+                  {#each getAvailableParents(index) as parentOption}
+                    <option value={parentOption.key}>{parentOption.label}</option>
+                  {/each}
+                </select>
+                
                 <button 
                   type="button" 
                   class="btn-remove-field" 
@@ -1414,15 +1472,15 @@
           </div>
           
           <!-- JSON Body Preview Button -->
-          {#if jsonFields.some(f => f.enabled && (hasVariables(f.key) || hasVariables(f.value)))}
+          {#if jsonFields.some(f => f.enabled && f.key && f.key.trim())}
             <div class="preview-button-container">
               <button 
                 type="button" 
                 class="btn-preview" 
                 on:click={() => openPreviewModal('body')}
-                title="Preview JSON body with variables resolved"
+                title="Preview JSON body structure with proper types"
               >
-                👁️ Preview Body
+                👁️ Preview JSON Body
               </button>
             </div>
           {/if}
@@ -2003,7 +2061,39 @@
     font-weight: 600;
   }
 
-  /* JSON and Form Fields Styles */
+    /* JSON and Form Fields Styles */
+  .field-type-select {
+    min-width: 80px;
+    padding: 0.375rem;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    background: white;
+    cursor: pointer;
+  }
+  
+  .field-parent-select {
+    min-width: 120px;
+    padding: 0.375rem;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    background: white;
+    cursor: pointer;
+  }
+  
+  .nested-field-indicator {
+    flex: 1;
+    padding: 0.5rem;
+    background: #f3f4f6;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    color: #6b7280;
+    font-style: italic;
+    text-align: center;
+  }
+
   .json-fields,
   .form-fields {
     border: 1px solid #e5e7eb;
